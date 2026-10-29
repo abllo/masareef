@@ -155,7 +155,6 @@ begin
     jsonb_build_object(
       'model', public.ai_model(p_purpose),
       'max_tokens', p_max_tokens,
-      'temperature', 0,
       'system', p_system,
       'tools', jsonb_build_array(p_tool),
       'tool_choice', jsonb_build_object('type', 'tool', 'name', p_tool->>'name'),
