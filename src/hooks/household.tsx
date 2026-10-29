@@ -16,5 +16,5 @@ export function useHousehold(): HouseholdContext {
 /** اسم العضو من معرّفه */
 export function useMemberName() {
   const { members } = useHousehold();
-  return (userId: string) => members.find((m) => m.user_id === userId)?.display_name ?? '—';
+  return (userId: string) => members.find((m) => m.user_id === userId)?.display_name ?? 'عضو سابق';
 }

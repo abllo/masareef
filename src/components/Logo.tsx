@@ -1,7 +1,7 @@
 /** شعار التطبيق: بيت بداخله عملة */
 export function Logo({ className = 'size-12' }: { className?: string }) {
   return (
-    <svg viewBox="0 0 1024 1024" className={className} role="img" aria-label="مصاريف البيت">
+    <svg viewBox="0 0 1024 1024" className={className} role="img" aria-label="مصاريف">
       <defs>
         <linearGradient id="logo-bg" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#14876F" />

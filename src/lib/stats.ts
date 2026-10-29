@@ -1,5 +1,5 @@
 import { percentages, sumHalalas } from './money';
-import { daysInMonth, monthOf } from './dates';
+import { addMonths, daysInMonth, monthEnd, monthOf } from './dates';
 import type { Category, Expense, Halalas, ISODate, MonthKey, MonthlyTotal } from './types';
 
 export interface CategorySlice {
@@ -59,7 +59,20 @@ export function monthlySeries(rows: readonly MonthlyTotal[], months: readonly Mo
   return months.map((month) => ({ month, total: totals.get(month) ?? 0 }));
 }
 
-/** نسبة التغير بين شهرين؛ null إذا لم يكن هناك صرف في الشهر السابق */
+/**
+ * الفترة التي نقارن بها مصروف الشهر المعروض:
+ * - الشهر الحالي (لم ينتهِ): الشهر السابق من أوله حتى نفس اليوم، حتى لا يبدو أول الشهر «أقل بكثير»
+ * - شهر منتهٍ: الشهر السابق كاملاً
+ */
+export function comparisonRange(month: MonthKey, today: ISODate): { from: ISODate; to: ISODate; partial: boolean } {
+  const prev = addMonths(month, -1);
+  const day = Number(today.slice(8, 10));
+  if (monthOf(today) !== month || day >= daysInMonth(month)) return { from: prev, to: monthEnd(prev), partial: false };
+  const cutoff = Math.min(day, daysInMonth(prev));
+  return { from: prev, to: `${prev.slice(0, 8)}${String(cutoff).padStart(2, '0')}`, partial: true };
+}
+
+/** نسبة التغير بين فترتين؛ null إذا لم يكن هناك صرف في الفترة السابقة */
 export function changeRatio(current: Halalas, previous: Halalas): number | null {
   if (previous <= 0) return null;
   return (current - previous) / previous;

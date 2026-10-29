@@ -8,11 +8,20 @@ function check<T>(res: { data: T; error: { message: string; code?: string } | nu
 }
 
 export function translateError(message: string, code?: string): string {
+  if (code === '23505' && /categories_household_id_name_key/.test(message)) return 'يوجد تصنيف بنفس الاسم';
   if (code === '23505') return 'هذه العملية مسجلة مسبقاً';
   if (code === '23503') return 'لا يمكن الحذف لوجود عمليات مرتبطة. يمكنك أرشفته بدلاً من ذلك';
   if (/invalid invite code/i.test(message)) return 'رمز الدعوة غير صحيح';
   if (/already in a household/i.test(message)) return 'حسابك مرتبط بعائلة بالفعل';
   if (/household is full/i.test(message)) return 'العائلة مكتملة العدد';
+  if (/only the owner can do this/i.test(message)) return 'هذا الإجراء لمنشئ العائلة فقط';
+  if (/owner cannot leave/i.test(message)) return 'منشئ العائلة لا يمكنه المغادرة';
+  if (/member not found/i.test(message)) return 'العضو غير موجود';
+  if (/not in a household/i.test(message)) return 'حسابك غير مرتبط بعائلة';
+  if (/same_password|different from the old/i.test(message)) return 'كلمة المرور الجديدة مطابقة للقديمة';
+  if (/rate limit|too many/i.test(message)) return 'محاولات كثيرة، انتظر قليلاً ثم أعد المحاولة';
+  if (/not authorized|Email address .* (is )?invalid|sending .*email/i.test(message))
+    return 'تعذّر إرسال الإيميل لهذا البريد. اطلب من منشئ العائلة تغيير كلمة مرورك من لوحة Supabase';
   if (/Invalid login credentials/i.test(message)) return 'البريد أو كلمة المرور غير صحيحة';
   if (/User already registered/i.test(message)) return 'هذا البريد مسجل مسبقاً، سجّل الدخول بدلاً من ذلك';
   if (/Password should be/i.test(message)) return 'كلمة المرور قصيرة، استخدم 8 أحرف على الأقل';
@@ -47,6 +56,18 @@ export const joinHousehold = async (code: string, displayName: string) =>
   check(await supabase.rpc('join_household', { p_code: code, p_display_name: displayName })) as string;
 
 export const regenerateInviteCode = async () => check(await supabase.rpc('regenerate_invite_code')) as string;
+
+export const removeMember = async (userId: string) => {
+  check(await supabase.rpc('remove_member', { p_user_id: userId }));
+};
+
+export const leaveHousehold = async () => {
+  check(await supabase.rpc('leave_household'));
+};
+
+// ---------- اختصار رسائل البنك ----------
+export const fetchSmsToken = async () => check(await supabase.rpc('my_sms_token')) as string;
+export const regenerateSmsToken = async () => check(await supabase.rpc('regenerate_sms_token')) as string;
 
 export async function updateHousehold(id: string, patch: Partial<Pick<Household, 'name' | 'monthly_budget'>>) {
   check(await supabase.from('households').update(patch).eq('id', id));

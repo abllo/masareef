@@ -45,3 +45,18 @@ export const CATEGORY_COLORS = [
   '#0E6B58', '#2563EB', '#7C3AED', '#DB2777', '#C2410C', '#B45309',
   '#0891B2', '#475569', '#16A34A', '#DC2626', '#4F46E5', '#64748B',
 ];
+
+/** أسماء عربية للأيقونات والألوان (لقارئ الشاشة) */
+export const ICON_LABELS: Record<string, string> = {
+  cart: 'عربة تسوق', food: 'طعام', coffee: 'قهوة', bike: 'توصيل', receipt: 'فاتورة', bag: 'حقيبة تسوق',
+  car: 'سيارة', fuel: 'وقود', broom: 'تنظيف', steering: 'سائق', home: 'بيت', power: 'كهرباء', water: 'ماء',
+  wifi: 'إنترنت', phone: 'جوال', tv: 'تلفزيون', health: 'صحة', pill: 'دواء', school: 'دراسة', books: 'كتب',
+  baby: 'أطفال', gift: 'هدية', clothes: 'ملابس', beauty: 'تجميل', travel: 'سفر', sport: 'رياضة', pet: 'حيوان أليف',
+  repair: 'صيانة', charity: 'صدقة', circle: 'أخرى',
+};
+
+export const COLOR_LABELS: Record<string, string> = {
+  '#0E6B58': 'أخضر داكن', '#2563EB': 'أزرق', '#7C3AED': 'بنفسجي', '#DB2777': 'وردي', '#C2410C': 'برتقالي',
+  '#B45309': 'بني', '#0891B2': 'سماوي', '#475569': 'رمادي داكن', '#16A34A': 'أخضر', '#DC2626': 'أحمر',
+  '#4F46E5': 'نيلي', '#64748B': 'رمادي',
+};

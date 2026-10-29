@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { budgetStatus, byCategory, changeRatio, filterExpenses, groupByDay, monthlySeries } from './stats';
+import { budgetStatus, byCategory, changeRatio, comparisonRange, filterExpenses, groupByDay, monthlySeries } from './stats';
 import { recurringForMonth } from './recurring';
 import type { Category, Expense, Recurring } from './types';
 
@@ -81,5 +81,21 @@ describe('recurringForMonth', () => {
   });
   it('hides templates that start later', () => {
     expect(recurringForMonth([r('x', 1, { start_month: '2026-05-01' })], [], '2026-04-01', '2026-04-10')).toHaveLength(0);
+  });
+});
+
+describe('comparisonRange', () => {
+  it('compares the current month with the same days of the previous month', () => {
+    expect(comparisonRange('2026-10-01', '2026-10-05')).toEqual({ from: '2026-09-01', to: '2026-09-05', partial: true });
+  });
+  it('caps the cut-off day at the end of a shorter previous month', () => {
+    expect(comparisonRange('2026-03-01', '2026-03-30')).toEqual({ from: '2026-02-01', to: '2026-02-28', partial: true });
+  });
+  it('uses the whole previous month for past months and on the last day', () => {
+    expect(comparisonRange('2026-08-01', '2026-10-05')).toEqual({ from: '2026-07-01', to: '2026-07-31', partial: false });
+    expect(comparisonRange('2026-10-01', '2026-10-31')).toEqual({ from: '2026-09-01', to: '2026-09-30', partial: false });
+  });
+  it('handles January', () => {
+    expect(comparisonRange('2027-01-01', '2027-01-10')).toEqual({ from: '2026-12-01', to: '2026-12-10', partial: true });
   });
 });

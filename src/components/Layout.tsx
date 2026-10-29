@@ -34,7 +34,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <div className="mb-6 flex items-center gap-3 px-2 pt-2">
             <Logo className="size-10" />
             <div>
-              <div className="font-bold leading-tight">مصاريف البيت</div>
+              <div className="font-bold leading-tight">مصاريف</div>
               <div className="text-xs text-muted">{household.name}</div>
             </div>
           </div>

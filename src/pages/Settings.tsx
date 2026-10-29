@@ -1,13 +1,17 @@
 import { useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
-import { ArrowsClockwise, Copy, SignOut, Plus, Tag, Target, UsersThree } from '@phosphor-icons/react';
+import {
+  ArrowsClockwise, ChatCircleText, Copy, Key, SignOut, Plus, Tag, Target, UserMinus, UsersThree,
+} from '@phosphor-icons/react';
 import { Button, Card, CategoryIcon, ConfirmButton, Field, IconButton, Sheet, cx } from '../components/ui';
 import { useHousehold } from '../hooks/household';
 import { useCategories, useDeleteCategory, useInvalidate, useSaveCategory, useUpdateHousehold } from '../hooks/queries';
-import { regenerateInviteCode } from '../lib/api';
-import { CATEGORY_COLORS, CATEGORY_ICONS } from '../lib/icons';
+import {
+  fetchSmsToken, leaveHousehold, regenerateInviteCode, regenerateSmsToken, removeMember, translateError,
+} from '../lib/api';
+import { CATEGORY_COLORS, CATEGORY_ICONS, COLOR_LABELS, ICON_LABELS } from '../lib/icons';
 import { formatSAR, parseAmount, toInputValue } from '../lib/money';
-import { supabase } from '../lib/supabase';
+import { SUPABASE_KEY, SUPABASE_URL, supabase } from '../lib/supabase';
 import type { Category } from '../lib/types';
 
 export default function Settings() {
@@ -16,12 +20,23 @@ export default function Settings() {
       <h1 className="text-xl font-bold">الإعدادات</h1>
       <BudgetSection />
       <FamilySection />
+      <SmsSection />
       <CategoriesSection />
+      <PasswordSection />
       <Button variant="ghost" className="w-full text-danger" onClick={() => supabase.auth.signOut()}>
         <SignOut className="size-5" weight="bold" /> تسجيل الخروج
       </Button>
     </div>
   );
+}
+
+async function copyText(text: string, message: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast.success(message);
+  } catch {
+    toast.error('تعذّر النسخ، اضغط مطولاً على النص وانسخه');
+  }
 }
 
 function BudgetSection() {
@@ -59,11 +74,8 @@ function FamilySection() {
   const [name, setName] = useState(me.display_name);
   const [familyName, setFamilyName] = useState(household.name);
   const [rotating, setRotating] = useState(false);
-
-  async function copyCode() {
-    await navigator.clipboard.writeText(household.invite_code).catch(() => {});
-    toast.success('تم نسخ رمز الدعوة');
-  }
+  const [busy, setBusy] = useState<string | null>(null);
+  const isOwner = me.role === 'owner';
 
   async function rotate() {
     setRotating(true);
@@ -75,6 +87,31 @@ function FamilySection() {
       toast.error((e as Error).message);
     } finally {
       setRotating(false);
+    }
+  }
+
+  async function remove(userId: string, displayName: string) {
+    setBusy(userId);
+    try {
+      await removeMember(userId);
+      await invalidate('household');
+      toast.success(`تمت إزالة ${displayName} من العائلة`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function leave() {
+    setBusy(me.user_id);
+    try {
+      await leaveHousehold();
+      await invalidate('household');
+      toast.success('غادرت العائلة');
+    } catch (e) {
+      toast.error((e as Error).message);
+      setBusy(null);
     }
   }
 
@@ -97,12 +134,21 @@ function FamilySection() {
         <p className="mb-2 text-sm font-medium text-muted">الأعضاء</p>
         <ul className="space-y-1">
           {members.map((m) => (
-            <li key={m.user_id} className="flex items-center justify-between rounded-xl bg-surface-2 px-4 py-2.5">
-              <span className="font-medium">{m.display_name}{m.user_id === me.user_id && ' (أنت)'}</span>
+            <li key={m.user_id} className="flex items-center justify-between gap-2 rounded-xl bg-surface-2 px-4 py-2.5">
+              <span className="min-w-0 flex-1 truncate font-medium">{m.display_name}{m.user_id === me.user_id && ' (أنت)'}</span>
               <span className="text-xs text-muted">{m.role === 'owner' ? 'المنشئ' : 'عضو'}</span>
+              {isOwner && m.user_id !== me.user_id && (
+                <ConfirmButton className="h-8 px-3 text-xs" loading={busy === m.user_id} confirmText="تأكيد الإزالة"
+                  onConfirm={() => remove(m.user_id, m.display_name)}>
+                  <UserMinus className="size-4" weight="bold" /> إزالة
+                </ConfirmButton>
+              )}
             </li>
           ))}
         </ul>
+        {isOwner && members.length > 1 && (
+          <p className="mt-2 text-xs text-muted">العضو المُزال يفقد الوصول فوراً، وتبقى عملياته في السجل.</p>
+        )}
       </div>
 
       <div className="rounded-2xl border border-dashed border-line p-4">
@@ -111,14 +157,138 @@ function FamilySection() {
           <code dir="ltr" className="flex-1 rounded-xl bg-surface-2 py-2.5 text-center text-xl font-bold tracking-[.3em]">
             {household.invite_code}
           </code>
-          <IconButton label="نسخ الرمز" onClick={copyCode}><Copy className="size-5" weight="bold" /></IconButton>
-          {me.role === 'owner' && (
+          <IconButton label="نسخ الرمز" onClick={() => copyText(household.invite_code, 'تم نسخ رمز الدعوة')}>
+            <Copy className="size-5" weight="bold" />
+          </IconButton>
+          {isOwner && (
             <IconButton label="إنشاء رمز جديد" onClick={rotate} disabled={rotating}>
               <ArrowsClockwise className={cx('size-5', rotating && 'animate-spin')} weight="bold" />
             </IconButton>
           )}
         </div>
+        {isOwner && <p className="mt-2 text-xs text-muted">بعد انضمام الجميع جدّد الرمز حتى لا يستخدمه أحد آخر.</p>}
       </div>
+
+      {!isOwner && (
+        <ConfirmButton className="w-full" loading={busy === me.user_id} confirmText="تأكيد المغادرة" onConfirm={leave}>
+          مغادرة العائلة
+        </ConfirmButton>
+      )}
+    </Card>
+  );
+}
+
+function CopyRow({ label, value, copied }: { label: string; value: string; copied: string }) {
+  return (
+    <div>
+      <p className="mb-1 text-sm font-medium text-muted">{label}</p>
+      <div className="flex items-center gap-2">
+        <code dir="ltr" className="min-w-0 flex-1 select-all truncate rounded-xl bg-surface-2 px-3 py-2.5 text-sm">{value}</code>
+        <IconButton label={`نسخ ${label}`} onClick={() => copyText(value, copied)}>
+          <Copy className="size-5" weight="bold" />
+        </IconButton>
+      </div>
+    </div>
+  );
+}
+
+/** قيم اختصار الآيفون: الرابط والمفتاح ورمز المستخدم، مع طريقة الإعداد */
+function SmsSection() {
+  const [token, setToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [rotating, setRotating] = useState(false);
+  const endpoint = `${SUPABASE_URL}/rest/v1/rpc/sms_expense`;
+
+  async function reveal() {
+    setLoading(true);
+    try {
+      setToken(await fetchSmsToken());
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function rotate() {
+    setRotating(true);
+    try {
+      setToken(await regenerateSmsToken());
+      toast.success('تم إنشاء رمز جديد. حدّثه في الاختصار، القديم توقف');
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setRotating(false);
+    }
+  }
+
+  return (
+    <Card className="space-y-4">
+      <div>
+        <h2 className="inline-flex items-center gap-2 font-bold"><ChatCircleText className="size-5 text-brand" weight="duotone" />التسجيل التلقائي من رسائل البنك</h2>
+        <p className="mt-1 text-sm text-muted">
+          اختصار في الآيفون يرسل رسالة الشراء للتطبيق فتُسجَّل تلقائياً وتظهر بعلامة 📩. انسخ القيم الثلاث إلى الاختصار.
+        </p>
+      </div>
+      <CopyRow label="1. الرابط" value={endpoint} copied="تم نسخ الرابط" />
+      <CopyRow label="2. المفتاح (apikey)" value={SUPABASE_KEY} copied="تم نسخ المفتاح" />
+      {token ? (
+        <>
+          <CopyRow label="3. رمزك الخاص (token)" value={token} copied="تم نسخ رمزك الخاص" />
+          <p className="text-xs text-danger">رمزك يسجّل مصاريف باسمك في عائلتك، لا تعطه أحداً. إذا تسرّب جدّده من هنا.</p>
+          <ConfirmButton className="h-10 px-4 text-sm" loading={rotating} confirmText="تأكيد: الرمز القديم سيتوقف" onConfirm={rotate}>
+            <ArrowsClockwise className="size-4" weight="bold" /> تجديد رمزي
+          </ConfirmButton>
+        </>
+      ) : (
+        <Button variant="secondary" onClick={reveal} loading={loading}>
+          <Key className="size-5" weight="duotone" /> إظهار رمزك الخاص
+        </Button>
+      )}
+
+      <details className="rounded-2xl bg-surface-2 px-4 py-3 text-sm">
+        <summary className="cursor-pointer font-semibold">طريقة إعداد الاختصار (مرة واحدة)</summary>
+        <ol className="mt-3 list-decimal space-y-2 ps-5 leading-relaxed text-muted">
+          <li>تطبيق <b>الاختصارات</b> ← <b>+</b> ← أضف إجراء <b>«الحصول على محتويات URL»</b>، والصق <b>الرابط</b>.</li>
+          <li>اضغط السهم الأزرق: <b>الطريقة POST</b>.</li>
+          <li><b>الرؤوس (Headers)</b> ← أضف رأساً: المفتاح <code dir="ltr">apikey</code> والقيمة <b>المفتاح</b>.</li>
+          <li><b>نص الطلب: JSON</b> ← أضف حقلاً نصياً <code dir="ltr">token</code> وقيمته <b>رمزك الخاص</b>، وحقلاً نصياً <code dir="ltr">message</code> واختر له <b>«مدخل الاختصار»</b> من الشريط فوق الكيبورد.</li>
+          <li>أضف إجراء <b>«إظهار إشعار»</b> واختر فيه <b>«محتويات URL»</b>، وسمِّ الاختصار <b>«تسجيل مصروف»</b>.</li>
+          <li>جرّبه بزر التشغيل: إشعار <b>«تجاهل: رسالة فارغة»</b> يعني أن الإعداد صحيح.</li>
+          <li><b>التحكم التلقائي</b> ← <b>+</b> ← <b>رسالة</b> ← الرسالة تتضمن <b>شراء</b> ← إجراء «تشغيل الاختصار: تسجيل مصروف» بالمدخل <b>إدخال الاختصار</b> ← أطفئ «التأكيد قبل التشغيل».</li>
+          <li>إذا كان بنكك يرسل بالإنجليزي، كرّر الخطوة السابقة بكلمة <b dir="ltr">Purchase</b>.</li>
+        </ol>
+        <p className="mt-3 text-xs text-muted">
+          يتجاهل التطبيق رسائل التحقق والإيداع والمرفوضة والملغاة، ولا يكرر الرسالة نفسها، ويربطها بالمصروف الثابت إن كان بنفس المبلغ.
+        </p>
+      </details>
+    </Card>
+  );
+}
+
+function PasswordSection() {
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (password.length < 8) return toast.error('كلمة المرور 8 أحرف على الأقل');
+    setLoading(true);
+    const { error } = await supabase.auth.updateUser({ password });
+    setLoading(false);
+    if (error) return toast.error(translateError(error.message));
+    setPassword('');
+    toast.success('تم تغيير كلمة المرور');
+  }
+
+  return (
+    <Card>
+      <h2 className="inline-flex items-center gap-2 font-bold"><Key className="size-5 text-brand" weight="duotone" />كلمة المرور</h2>
+      <form onSubmit={submit} className="mt-4 flex items-end gap-2">
+        <Field label="كلمة مرور جديدة" type="password" dir="ltr" autoComplete="new-password" minLength={8} className="flex-1"
+          value={password} onChange={(e) => setPassword(e.target.value)} />
+        <Button type="submit" variant="secondary" loading={loading}>تغيير</Button>
+      </form>
     </Card>
   );
 }
@@ -184,7 +354,7 @@ function CategoryForm({ item, nextOrder, onDone }: { item?: Category; nextOrder:
         <legend className="mb-2 text-sm font-medium text-muted">الأيقونة</legend>
         <div className="grid grid-cols-6 gap-1.5 sm:grid-cols-8">
           {Object.entries(CATEGORY_ICONS).map(([key, Icon]) => (
-            <button key={key} type="button" aria-label={key} aria-pressed={icon === key} onClick={() => setIcon(key)}
+            <button key={key} type="button" aria-label={ICON_LABELS[key] ?? key} title={ICON_LABELS[key]} aria-pressed={icon === key} onClick={() => setIcon(key)}
               className={cx('flex aspect-square items-center justify-center rounded-xl transition active:scale-90', icon === key ? 'text-white' : 'bg-surface-2 text-muted')}
               style={icon === key ? { background: color } : undefined}>
               <Icon className="size-5" weight="duotone" />
@@ -196,7 +366,7 @@ function CategoryForm({ item, nextOrder, onDone }: { item?: Category; nextOrder:
         <legend className="mb-2 text-sm font-medium text-muted">اللون</legend>
         <div className="flex flex-wrap gap-2">
           {CATEGORY_COLORS.map((c) => (
-            <button key={c} type="button" aria-label={c} aria-pressed={color === c} onClick={() => setColor(c)}
+            <button key={c} type="button" aria-label={COLOR_LABELS[c] ?? c} title={COLOR_LABELS[c]} aria-pressed={color === c} onClick={() => setColor(c)}
               className={cx('size-9 rounded-full ring-offset-2 ring-offset-surface', color === c && 'ring-2 ring-ink')}
               style={{ background: c }} />
           ))}

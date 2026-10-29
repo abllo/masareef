@@ -76,3 +76,21 @@ input[type="date"]::-webkit-calendar-picker-indicator { opacity: .6; }
 /* المساحة الآمنة لأجهزة الآيفون */
 .pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 0.75rem); }
 .pt-safe { padding-top: env(safe-area-inset-top); }
+
+/* تقرير PDF: يُرسم داخل الصفحة ولا يظهر إلا عند الطباعة */
+#print-root { display: none; }
+@media print {
+  @page { size: A4; margin: 14mm; }
+  html, body { background: #fff !important; color: #14211E !important; }
+  body > *:not(#print-root) { display: none !important; }
+  #print-root { display: block; font-family: 'IBM Plex Sans Arabic', Tahoma, sans-serif; font-size: 12px; color: #14211E; }
+  #print-root h1 { font-size: 20px; font-weight: 700; margin: 0 0 4px; }
+  #print-root h2 { font-size: 14px; font-weight: 700; margin: 22px 0 0; }
+  #print-root .muted { color: #5B6B67; }
+  #print-root .total { font-size: 26px; font-weight: 700; margin: 16px 0; color: #0E6B58; }
+  #print-root table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  #print-root th, #print-root td { padding: 6px 8px; border-bottom: 1px solid #DCE3E1; text-align: right; }
+  #print-root th { background: #EEF3F1; font-weight: 600; }
+  #print-root td.num { direction: ltr; text-align: left; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  #print-root tr { break-inside: avoid; }
+}

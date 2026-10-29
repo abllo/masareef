@@ -15,6 +15,10 @@ export function useRealtimeSync(householdId: string) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'categories', filter }, () => refresh(['categories']))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'recurring_expenses', filter }, () => refresh(['recurring']))
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'households', filter: `id=eq.${householdId}` }, () => refresh(['household']))
+      // أحداث الحذف في Supabase لا تقبل الفلترة، فنستقبلها بدون فلتر (تحمل المعرّف فقط) ونحدّث
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'expenses' }, () => refresh(EXPENSE_DEPENDENT))
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'categories' }, () => refresh(['categories']))
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'recurring_expenses' }, () => refresh(['recurring']))
       .subscribe();
 
     // عند العودة للتطبيق بعد غياب

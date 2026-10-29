@@ -7,11 +7,11 @@ import { useExpenseSheet } from '../components/Layout';
 import { Logo } from '../components/Logo';
 import { AnimatedAmount, Button, Card, CategoryIcon, EmptyState, MonthSwitcher, SectionTitle, Spinner, cx } from '../components/ui';
 import { useHousehold } from '../hooks/household';
-import { useCategories, useMonthExpenses, useMonthlyTotals, useRecurring, useRecurringPayments } from '../hooks/queries';
-import { addMonths, formatMonth, lastMonths, monthOf, todayISO } from '../lib/dates';
+import { useCategories, useExpenses, useMonthExpenses, useMonthlyTotals, useRecurring, useRecurringPayments } from '../hooks/queries';
+import { formatMonth, lastMonths, monthOf, todayISO } from '../lib/dates';
 import { formatSAR, sumHalalas } from '../lib/money';
 import { recurringForMonth } from '../lib/recurring';
-import { budgetStatus, byCategory, changeRatio, monthlySeries } from '../lib/stats';
+import { budgetStatus, byCategory, changeRatio, comparisonRange, monthlySeries } from '../lib/stats';
 
 export default function Dashboard() {
   const today = todayISO();
@@ -24,13 +24,15 @@ export default function Dashboard() {
   const monthly = useMonthlyTotals(monthOf(today), 6);
   const recurring = useRecurring();
   const payments = useRecurringPayments(month);
+  const cmp = comparisonRange(month, today);
+  const previousExpenses = useExpenses(cmp.from, cmp.to);
 
   const list = expenses.data ?? [];
   const total = sumHalalas(list.map((e) => e.amount));
   const slices = useMemo(() => byCategory(list, categories), [list, categories]);
   const series = monthlySeries(monthly.data ?? [], lastMonths(monthOf(today), 6));
-  const previous = series.find((s) => s.month === addMonths(month, -1))?.total ?? 0;
-  const change = changeRatio(total, previous);
+  const previous = sumHalalas((previousExpenses.data ?? []).map((e) => e.amount));
+  const change = previousExpenses.isSuccess && !previousExpenses.isPlaceholderData ? changeRatio(total, previous) : null;
   const budget = budgetStatus(total, household.monthly_budget, month, today);
   const unpaid = recurringForMonth(recurring.data ?? [], payments.data ?? [], month, today).filter((r) => r.status !== 'paid');
 
@@ -58,7 +60,7 @@ export default function Dashboard() {
           {change !== null && (
             <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-white/12 px-2.5 py-1 text-xs font-medium">
               {change > 0 ? <TrendUp className="size-4" weight="bold" /> : <TrendDown className="size-4" weight="bold" />}
-              {change > 0 ? 'أكثر' : 'أقل'} من الشهر السابق بـ {Math.abs(Math.round(change * 100))}%
+              {change > 0 ? 'أكثر' : 'أقل'} من {cmp.partial ? 'نفس الفترة من الشهر السابق' : 'الشهر السابق'} بـ {Math.abs(Math.round(change * 100))}%
             </p>
           )}
 

@@ -8,7 +8,7 @@ import { fetchHouseholdContext } from './lib/api';
 import { isConfigured } from './lib/supabase';
 import { Layout } from './components/Layout';
 import { Spinner, FullScreenMessage } from './components/ui';
-import Login from './pages/Login';
+import Login, { NewPassword } from './pages/Login';
 import Onboarding from './pages/Onboarding';
 
 // تحميل الصفحات عند الحاجة لتسريع أول فتح
@@ -18,7 +18,7 @@ const RecurringPage = lazy(() => import('./pages/Recurring'));
 const Settings = lazy(() => import('./pages/Settings'));
 
 export default function App() {
-  const { session, loading } = useAuth();
+  const { session, loading, recovery, endRecovery } = useAuth();
   const userId = session?.user.id;
 
   const household = useQuery({
@@ -36,6 +36,7 @@ export default function App() {
   }
   if (loading || (userId && household.isPending)) return <Spinner full />;
   if (!session) return <Login />;
+  if (recovery) return <NewPassword onDone={endRecovery} />;
   if (household.isError) {
     return <FullScreenMessage title="تعذّر تحميل البيانات">{household.error.message}</FullScreenMessage>;
   }

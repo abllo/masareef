@@ -21,7 +21,7 @@ function rows({ expenses, categories, members }: ReportInput) {
       category: cat.get(e.category_id) ?? '—',
       description: e.description ?? '',
       amount: e.amount,
-      by: who.get(e.created_by) ?? '—',
+      by: who.get(e.created_by) ?? 'عضو سابق',
     }));
 }
 
@@ -34,11 +34,37 @@ function download(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+const isTouchDevice = () => window.matchMedia?.('(pointer: coarse)').matches ?? false;
+
+export type Delivery = 'shared' | 'downloaded' | 'cancelled' | { retry: () => Promise<void> };
+
+/**
+ * يسلّم الملف للمستخدم:
+ * - الجوال: قائمة المشاركة (حفظ في الملفات، واتساب…) لأن التنزيل المباشر لا يعمل داخل التطبيق المثبّت على الآيفون
+ * - الكمبيوتر: تنزيل مباشر
+ * إذا رفض الآيفون المشاركة لأن تجهيز الملف أخذ وقتاً، نعيد دالة تُستدعى من ضغطة جديدة.
+ */
+export async function deliverFile(file: File): Promise<Delivery> {
+  const share = () => navigator.share({ files: [file], title: file.name });
+  if (isTouchDevice() && typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] })) {
+    try {
+      await share();
+      return 'shared';
+    } catch (e) {
+      const name = (e as DOMException).name;
+      if (name === 'AbortError') return 'cancelled';
+      if (name === 'NotAllowedError') return { retry: () => share().catch(() => {}) };
+    }
+  }
+  download(file, file.name);
+  return 'downloaded';
+}
+
 /** ملف Excel بورقتين: العمليات + ملخص التصنيفات، باتجاه من اليمين لليسار */
 export async function exportExcel(input: ReportInput, filename: string) {
   const { default: ExcelJS } = await import('exceljs'); // تحميل عند الطلب فقط
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'مصاريف البيت';
+  wb.creator = 'مصاريف';
   const money = '#,##0.00 "ر.س"';
 
   const ws = wb.addWorksheet('العمليات', { views: [{ rightToLeft: true, state: 'frozen', ySplit: 1 }] });
@@ -70,7 +96,7 @@ export async function exportExcel(input: ReportInput, filename: string) {
   summary.getRow(1).font = { bold: true };
 
   const buffer = await wb.xlsx.writeBuffer();
-  download(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), filename);
+  return deliverFile(new File([buffer], filename, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
 }
 
 const esc = (s: string) =>
@@ -79,29 +105,18 @@ const esc = (s: string) =>
 /**
  * تقرير PDF عبر نافذة الطباعة في المتصفح ("حفظ كـ PDF").
  * هذا يضمن عرض الخط العربي واتصال الحروف بشكل صحيح، وهو ما تفشل فيه أغلب مكتبات PDF في المتصفح.
+ * يُطبع داخل نفس الصفحة (بدون نافذة منبثقة) فيعمل أيضاً في التطبيق المثبّت على الآيفون.
  */
 export function printReport(input: ReportInput) {
   const data = rows(input);
   const total = sumHalalas(data.map((r) => r.amount));
   const slices = byCategory(input.expenses, input.categories);
-  const win = window.open('', '_blank');
-  if (!win) throw new Error('اسمح بالنوافذ المنبثقة لهذا الموقع ثم أعد المحاولة');
 
-  win.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
-<title>${esc(input.title)}</title>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet">
-<style>
-  @page { size: A4; margin: 14mm; }
-  body { font-family: 'IBM Plex Sans Arabic', Tahoma, sans-serif; color: #14211E; font-size: 12px; }
-  h1 { font-size: 20px; margin: 0 0 4px; } .muted { color: #5B6B67; }
-  .total { font-size: 26px; font-weight: 700; margin: 16px 0; color: #0E6B58; }
-  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-  th, td { padding: 6px 8px; border-bottom: 1px solid #DCE3E1; text-align: right; }
-  th { background: #EEF3F1; font-weight: 600; }
-  td.num { direction: ltr; text-align: left; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  h2 { font-size: 14px; margin: 22px 0 0; }
-  tr { break-inside: avoid; }
-</style></head><body>
+  document.getElementById('print-root')?.remove();
+  const root = document.createElement('div');
+  root.id = 'print-root';
+  root.dir = 'rtl';
+  root.innerHTML = `
 <h1>${esc(input.title)}</h1>
 <div class="muted">${esc(input.periodLabel)}، ${data.length} عملية</div>
 <div class="total">${esc(formatSAR(total))}</div>
@@ -112,8 +127,17 @@ ${slices.map((s) => `<tr><td>${esc(s.category?.name ?? '—')}</td><td>${s.count
 <h2>العمليات</h2>
 <table><thead><tr><th>التاريخ</th><th>التصنيف</th><th>الوصف</th><th>أضافه</th><th>المبلغ</th></tr></thead><tbody>
 ${data.map((r) => `<tr><td>${esc(formatDayShort(r.date))}</td><td>${esc(r.category)}</td><td>${esc(r.description)}</td><td>${esc(r.by)}</td><td class="num">${esc(formatSAR(r.amount))}</td></tr>`).join('')}
-</tbody></table>
-<script>document.fonts.ready.then(() => setTimeout(() => window.print(), 300));</script>
-</body></html>`);
-  win.document.close();
+</tbody></table>`;
+  document.body.appendChild(root);
+
+  // عنوان الصفحة = اسم ملف PDF المقترح
+  const previousTitle = document.title;
+  document.title = `${input.title} - ${input.periodLabel}`;
+  const cleanup = () => {
+    document.title = previousTitle;
+    root.remove();
+    window.removeEventListener('afterprint', cleanup);
+  };
+  window.addEventListener('afterprint', cleanup);
+  requestAnimationFrame(() => setTimeout(() => window.print(), 50));
 }

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
-import { ArrowSquareOut, Camera, CheckCircle, Trash } from '@phosphor-icons/react';
+import { ArrowSquareOut, Camera, CheckCircle, Receipt as ReceiptIcon, Trash } from '@phosphor-icons/react';
 import { useCategories, useDeleteExpense, useSaveExpense } from '../hooks/queries';
 import { useMemberName } from '../hooks/household';
 import { receiptUrl } from '../lib/api';
@@ -56,15 +56,21 @@ function ExpenseForm({ expense, onDone }: { expense?: Expense; onDone: () => voi
     onDone();
   }
 
-  async function openReceipt() {
+  // الفاتورة تُعرض داخل اللوحة نفسها (window.open غير موثوق في التطبيق المثبّت على الآيفون)
+  const [receiptView, setReceiptView] = useState<{ url: string; isPdf: boolean } | null>(null);
+  const [loadingReceipt, setLoadingReceipt] = useState(false);
+
+  async function toggleReceipt() {
+    if (receiptView) return setReceiptView(null);
     if (!expense?.receipt_path) return;
-    const win = window.open('', '_blank'); // تُفتح مباشرة حتى لا يحجبها المتصفح
+    setLoadingReceipt(true);
     try {
       const url = await receiptUrl(expense.receipt_path);
-      if (win) win.location.href = url;
+      setReceiptView({ url, isPdf: expense.receipt_path.toLowerCase().endsWith('.pdf') });
     } catch (err) {
-      win?.close();
       toast.error((err as Error).message);
+    } finally {
+      setLoadingReceipt(false);
     }
   }
 
@@ -143,10 +149,23 @@ function ExpenseForm({ expense, onDone }: { expense?: Expense; onDone: () => voi
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
           <span>أضافه {memberName(expense.created_by)}</span>
           {expense.receipt_path && (
-            <button type="button" onClick={openReceipt} className="inline-flex items-center gap-1 font-medium text-brand">
-              <ArrowSquareOut className="size-4" weight="bold" /> عرض الفاتورة
+            <button type="button" onClick={toggleReceipt} disabled={loadingReceipt} aria-expanded={Boolean(receiptView)}
+              className="inline-flex items-center gap-1 font-medium text-brand disabled:opacity-50">
+              <ReceiptIcon className="size-4" weight="bold" /> {receiptView ? 'إخفاء الفاتورة' : loadingReceipt ? 'جارٍ التحميل…' : 'عرض الفاتورة'}
             </button>
           )}
+        </div>
+      )}
+
+      {receiptView && (
+        <div className="space-y-2">
+          {!receiptView.isPdf && (
+            <img src={receiptView.url} alt="صورة الفاتورة" className="max-h-[55dvh] w-full rounded-2xl bg-surface-2 object-contain" />
+          )}
+          <a href={receiptView.url} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-sm font-medium text-brand">
+            <ArrowSquareOut className="size-4" weight="bold" /> {receiptView.isPdf ? 'فتح ملف الفاتورة' : 'فتح بالحجم الكامل'}
+          </a>
         </div>
       )}
 

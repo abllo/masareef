@@ -41,7 +41,11 @@ export default function Expenses() {
   async function onExcel() {
     setExporting(true);
     try {
-      await exportExcel(report(), `مصاريف-${from}-${to}.xlsx`);
+      const result = await exportExcel(report(), `مصاريف-${from}-${to}.xlsx`);
+      if (typeof result === 'object') {
+        // الآيفون يطلب ضغطة جديدة لفتح قائمة المشاركة بعد تجهيز الملف
+        toast('ملف Excel جاهز', { duration: 20000, action: { label: 'حفظ / مشاركة', onClick: () => void result.retry() } });
+      }
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
