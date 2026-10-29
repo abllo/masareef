@@ -5828,11 +5828,11 @@ notify pgrst, 'reload schema';
 
 -- ───────────── 0017_fuel.sql ─────────────
 -- =====================================================================
---  0017: تصنيف «البنزين»
---   1) تصنيف أساسي جديد «البنزين» لكل عائلة (وللعائلات الجديدة)
---   2) القراءة المحلية وClaude يتعرفون على محطات الوقود ويصنفونها «البنزين»
+--  0017: تصنيف «محطات الوقود»
+--   1) تصنيف أساسي جديد «محطات الوقود» لكل عائلة (وللعائلات الجديدة)
+--   2) القراءة المحلية وClaude يتعرفون على محطات الوقود ويصنفونها تلقائياً
 --      حتى لو المحطة فيها كوفي أو بقالة
---   3) نقل عمليات البنزين السابقة وقواعد محطاتها للتصنيف الجديد
+--   3) نقل عمليات الوقود السابقة وقواعد محطاتها للتصنيف الجديد، ويتعلّم كل محطة كقاعدة
 -- =====================================================================
 
 -- 1) التصنيف لكل عائلة (قبل «مصاريف أخرى»)
@@ -5842,15 +5842,15 @@ begin
   for h in select id from public.households loop
     v_id := null;
     select id into v_id from public.categories where household_id = h.id
-      and (icon = 'fuel' or public.normalize_category(name) in ('بنزين', 'وقود', 'محروقات'))
+      and (icon = 'fuel' or public.normalize_category(name) in ('بنزين', 'وقود', 'محروقات', 'محطات وقود', 'محطه وقود'))
       order by is_archived, sort_order limit 1;
     if v_id is null then
       select sort_order into v_other from public.categories where household_id = h.id and icon = 'circle' order by sort_order desc limit 1;
       update public.categories set sort_order = sort_order + 1 where household_id = h.id and sort_order >= coalesce(v_other, 999);
       insert into public.categories (household_id, name, icon, color, sort_order, is_core)
-      values (h.id, 'البنزين', 'fuel', '#4F46E5', coalesce(v_other, 99), true);
+      values (h.id, 'محطات الوقود', 'fuel', '#4F46E5', coalesce(v_other, 99), true);
     else
-      update public.categories set is_archived = false, is_core = true, icon = 'fuel' where id = v_id;
+      update public.categories set name = 'محطات الوقود', is_archived = false, is_core = true, icon = 'fuel' where id = v_id;
     end if;
   end loop;
 end $$;
@@ -5880,7 +5880,7 @@ begin
     (v_id, 'الفواتير والاشتراكات', 'receipt',  '#2563EB', 4,  true),
     (v_id, 'التسوق والمشتريات',    'bag',      '#7C3AED', 5,  true),
     (v_id, 'مصاريف السيارة',       'car',      '#475569', 6,  true),
-    (v_id, 'البنزين',              'fuel',     '#4F46E5', 7,  true),
+    (v_id, 'محطات الوقود',         'fuel',     '#4F46E5', 7,  true),
     (v_id, 'الصحة والصيدليات',     'health',   '#DC2626', 8,  true),
     (v_id, 'راتب العاملة المنزلية','broom',    '#B45309', 9,  true),
     (v_id, 'راتب السائق',          'steering', '#0891B2', 10, true),
@@ -6005,7 +6005,7 @@ begin
   hay := regexp_replace(hay, '(stc ?bank|stc ?pay|بنك stc|stc بنك|اس تي سي باي)', '', 'g');
   cat_name := case
     when hay ~ '(هنقر|hunger|جاهز|jahez|مرسول|mrsool|تويو|toyou|نينجا|\mninja\M|كيتا|keeta|chefz|شفز)' then 'تطبيقات التوصيل'
-    when hay ~ '(بنزين|وقود|محروقات|\mfuel\M|petrol|بترول|sasco|ساسكو|aldrees|الدريس|\mnaft\M|نفط|محطة|محطه|gas station|oomco|apsco|wafi energy|adnoc|ادنوك|أدنوك)' then 'البنزين'
+    when hay ~ '(بنزين|وقود|محروقات|\mg[ .-]?oil\M|جي ?[اأإ]ويل|جى ?[اأإ]ويل|\mfuel\M|petrol|بترول|sasco|ساسكو|aldrees|الدريس|\mnaft\M|نفط|محطة|محطه|gas station|oomco|apsco|wafi energy|adnoc|ادنوك|أدنوك)' then 'محطات الوقود'
     when hay ~ '(كوفي|كافيه|كافي|قهوة|مقهى|cafe|café|coffee|starbucks|ستاربكس|مطعم|مطاعم|restaurant|البيك|albaik|mcdonald|ماكدونالدز|\mkudu\M|كودو|herfy|هرفي|barns|بارنز|dunkin|دانكن|pizza|بيتزا|burger|برجر|شاورما|shawarma|\mkfc\M|كنتاكي|subway|domino|دومينوز|tim hortons|هاف مليون|half million|krispy|كرسبي|مخبز|bakery|حلويات)' then 'المطاعم والمقاهي'
     when hay ~ '(دانوب|danube|بنده|\mpanda\M|عثيم|othaim|كارفور|carrefour|تميمي|tamimi|لولو|\mlulu\M|نستو|nesto|ماركت|\mmarket\M|supermarket|hypermarket|هايبر|تموينات|سوبر|بقالة|grocery)' then 'البقالة والسوبرماركت'
     when hay ~ '(amazon now|\mnana\M|نانا|نوفا|nova water|berain|بيرين)' then 'البقالة والسوبرماركت'
@@ -6021,7 +6021,7 @@ begin
   end;
   cat_icon := case cat_name
     when 'تطبيقات التوصيل' then 'bike' when 'المطاعم والمقاهي' then 'food' when 'البقالة والسوبرماركت' then 'cart'
-    when 'التسوق والمشتريات' then 'bag' when 'الفواتير والاشتراكات' then 'receipt' when 'مصاريف السيارة' then 'car' when 'البنزين' then 'fuel'
+    when 'التسوق والمشتريات' then 'bag' when 'الفواتير والاشتراكات' then 'receipt' when 'مصاريف السيارة' then 'car' when 'محطات الوقود' then 'fuel'
     when 'الصحة والصيدليات' then 'health' when 'السفر والحجوزات' then 'travel' when 'الصدقات والتبرعات' then 'charity'
     when 'العناية الشخصية' then 'beauty' when 'راتب العاملة المنزلية' then 'broom'
     else 'circle' end;
@@ -6050,7 +6050,7 @@ Amounts:
 
 merchant: the clean shop/brand name a person would write, without branch numbers, city, country or terminal codes ("STARBUCKS 1234 JEDDAH SA" → "Starbucks", "HUNGERSTATION RIYADH" → "HungerStation", "TESCO STORES 3214 LONDON GB" → "Tesco", "مطعم البيك فرع ٣" → "البيك"). Keep Arabic names in Arabic.
 
-category: exactly one of the family's categories (the enum). For a merchant listed under "Learned", always use the learned category. Saudi hints: HungerStation, Jahez, Mrsool, ToYou, Keeta, The Chefz, Ninja → delivery apps; Panda, Danube, Othaim, Carrefour, Tamimi, Lulu, Nesto, Farm, Bin Dawood → groceries; cafes, restaurants, bakeries, sweets → restaurants & cafes; STC, Mobily, Zain, SEC electricity, National Water, Netflix, Shahid, Spotify, Apple, Google, iCloud → bills & subscriptions; car wash, workshops, tyres, oil change → car; Amazon, Noon, Shein, Trendyol, IKEA, Jarir, Extra, Namshi, Centrepoint, Max, Zara, Tamara/Tabby instalments → shopping; Amazon Now, Nana, Tamimi, water delivery (Nova, Berain, النبع) → groceries; Nahdi, Al-Dawaa, Whites, pharmacies, clinics, hospitals, labs, dentists, opticians → health; fuel stations — Aldrees (الدريس), SASCO (ساسكو), Naft (نفط), OOMCO, APSCO, Wafi Energy, ADNOC, Petromin stations, or any merchant whose name says محطة / بترول / بنزين / وقود / petrol / fuel / gas station → the fuel category (البنزين) if the family has one, even when the station also sells coffee or snacks; car services (ACDelco, Petromin Express, oil change), parking (Woqoof, Mawqif), Careem, Uber, Jeeny → car; HiNet, Mobily Pay, STC Pay bills → bills; Smasco, Musaned, recruitment / hourly maid services → the domestic worker category if the family has one; airlines (Saudia, flynas, flyadeal, Qatar Airways, Emirates), Almosafer, Booking.com, Agoda, Airbnb, VFS / visa centres → the travel bookings category if the family has one; Ehsan (إحسان), Jood, charities, donations → the charity category if the family has one; barbers, salons (صالون), spas, massage, laundry (مغسلة ملابس, Gaseel), tailors (خياط) → the personal care category if the family has one. Abroad, use the same logic for local merchants (supermarkets → groceries, restaurants → restaurants, etc.): purchases made abroad keep their real category because the app groups them into trips automatically — never put them in a travel category.
+category: exactly one of the family's categories (the enum). For a merchant listed under "Learned", always use the learned category. Saudi hints: HungerStation, Jahez, Mrsool, ToYou, Keeta, The Chefz, Ninja → delivery apps; Panda, Danube, Othaim, Carrefour, Tamimi, Lulu, Nesto, Farm, Bin Dawood → groceries; cafes, restaurants, bakeries, sweets → restaurants & cafes; STC, Mobily, Zain, SEC electricity, National Water, Netflix, Shahid, Spotify, Apple, Google, iCloud → bills & subscriptions; car wash, workshops, tyres, oil change → car; Amazon, Noon, Shein, Trendyol, IKEA, Jarir, Extra, Namshi, Centrepoint, Max, Zara, Tamara/Tabby instalments → shopping; Amazon Now, Nana, Tamimi, water delivery (Nova, Berain, النبع) → groceries; Nahdi, Al-Dawaa, Whites, pharmacies, clinics, hospitals, labs, dentists, opticians → health; fuel stations — Aldrees (الدريس), SASCO (ساسكو), Naft (نفط), G Oil (جي أويل), OOMCO, APSCO, Wafi Energy, ADNOC, Petromin stations, or any merchant whose name says محطة / بترول / بنزين / وقود / petrol / fuel / gas station → the fuel category (محطات الوقود) if the family has one, even when the station also sells coffee or snacks; car services (ACDelco, Petromin Express, oil change), parking (Woqoof, Mawqif), Careem, Uber, Jeeny → car; HiNet, Mobily Pay, STC Pay bills → bills; Smasco, Musaned, recruitment / hourly maid services → the domestic worker category if the family has one; airlines (Saudia, flynas, flyadeal, Qatar Airways, Emirates), Almosafer, Booking.com, Agoda, Airbnb, VFS / visa centres → the travel bookings category if the family has one; Ehsan (إحسان), Jood, charities, donations → the charity category if the family has one; barbers, salons (صالون), spas, massage, laundry (مغسلة ملابس, Gaseel), tailors (خياط) → the personal care category if the family has one. Abroad, use the same logic for local merchants (supermarkets → groceries, restaurants → restaurants, etc.): purchases made abroad keep their real category because the app groups them into trips automatically — never put them in a travel category.
 Use "__new__" ONLY when the purchase clearly belongs to a common spending area that none of the categories covers (for example education, kids) — never for a single merchant and never for a near-duplicate of an existing category. Then fill new_category with a short Arabic name (2–3 words) and an icon from its enum. When unsure, use the family's "other" category.
 
 bank: the bank or wallet that sent the message / issued the card: alrajhi (الراجحي), alinma (الإنماء), snb (البنك الأهلي), riyad (بنك الرياض), sab (ساب), anb (البنك العربي الوطني), albilad (بنك البلاد), aljazira (بنك الجزيرة), bsf (البنك السعودي الفرنسي), saib (البنك السعودي للاستثمار), gib (بنك الخليج الدولي / ميم), stcbank (STC Bank / stc pay), barq (برق), urpay, d360, vision (Vision Bank), other; null if the message does not say.
@@ -6262,11 +6262,10 @@ end $$;
 
 revoke all on function public.sms_parse(uuid, text, boolean, boolean) from public, anon, authenticated;
 
--- 3) العمليات والقواعد السابقة (بدون ما يتعلّم قواعد جديدة أثناء النقل)
+-- 3) العمليات والقواعد السابقة (نقل العملية من رسالة بنك يحفظ قاعدة لمتجرها تلقائياً)
 do $$
-declare rx constant text := '(بنزين|وقود|محروقات|\mfuel\M|petrol|بترول|sasco|ساسكو|aldrees|الدريس|\mnaft\M|نفط|محطة|محطه|gas station|oomco|apsco|wafi energy|adnoc|ادنوك|أدنوك)';
+declare rx constant text := '(بنزين|وقود|محروقات|\mg[ .-]?oil\M|جي ?[اأإ]ويل|جى ?[اأإ]ويل|\mfuel\M|petrol|بترول|sasco|ساسكو|aldrees|الدريس|\mnaft\M|نفط|محطة|محطه|gas station|oomco|apsco|wafi energy|adnoc|ادنوك|أدنوك)';
 begin
-  perform set_config('masareef.no_learn', 'on', true);
   update public.merchant_rules r set category_id = c.id, updated_at = now()
   from public.categories c
   where c.household_id = r.household_id and c.icon = 'fuel' and not c.is_archived
