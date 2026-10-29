@@ -276,7 +276,7 @@ function PasswordSection() {
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (password.length < 8) return toast.error('كلمة المرور 8 أحرف على الأقل');
+    if (password.length < 6) return toast.error('كلمة المرور 6 أحرف أو أرقام على الأقل');
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
@@ -289,7 +289,7 @@ function PasswordSection() {
     <Card>
       <h2 className="inline-flex items-center gap-2 font-bold"><Key className="size-5 text-brand" weight="duotone" />كلمة المرور</h2>
       <form onSubmit={submit} className="mt-4 flex items-end gap-2">
-        <Field label="كلمة مرور جديدة" type="password" dir="ltr" autoComplete="new-password" minLength={8} className="flex-1"
+        <Field label="كلمة مرور جديدة" type="password" dir="ltr" autoComplete="new-password" minLength={6} className="flex-1"
           value={password} onChange={(e) => setPassword(e.target.value)} />
         <Button type="submit" variant="secondary" loading={loading}>تغيير</Button>
       </form>

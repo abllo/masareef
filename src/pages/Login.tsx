@@ -45,7 +45,7 @@ export default function Login() {
         </div>
         <form onSubmit={submit} className="space-y-4">
           <Field label="البريد الإلكتروني" type="email" dir="ltr" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-          <Field label="كلمة المرور" type="password" dir="ltr" minLength={8} required
+          <Field label="كلمة المرور" type="password" dir="ltr" minLength={6} required
             autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
             value={password} onChange={(e) => setPassword(e.target.value)} />
           <Button type="submit" loading={loading} className="w-full">
@@ -74,7 +74,7 @@ export function NewPassword({ onDone }: { onDone: () => void }) {
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (password.length < 8) return toast.error('كلمة المرور 8 أحرف على الأقل');
+    if (password.length < 6) return toast.error('كلمة المرور 6 أحرف أو أرقام على الأقل');
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
@@ -88,7 +88,7 @@ export function NewPassword({ onDone }: { onDone: () => void }) {
       <form onSubmit={submit} className="w-full max-w-sm space-y-4">
         <Logo className="size-14" />
         <h1 className="text-2xl font-bold">كلمة مرور جديدة</h1>
-        <Field label="كلمة المرور الجديدة" type="password" dir="ltr" minLength={8} required autoFocus
+        <Field label="كلمة المرور الجديدة" type="password" dir="ltr" minLength={6} required autoFocus
           autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
         <Button type="submit" loading={loading} className="w-full">حفظ</Button>
       </form>

@@ -32,7 +32,7 @@ export function translateError(message: string, code?: string): string {
     return 'تعذّر إرسال الإيميل لهذا البريد. اطلب من منشئ العائلة تغيير كلمة مرورك من لوحة Supabase';
   if (/Invalid login credentials/i.test(message)) return 'البريد أو كلمة المرور غير صحيحة';
   if (/User already registered/i.test(message)) return 'هذا البريد مسجل مسبقاً، سجّل الدخول بدلاً من ذلك';
-  if (/Password should be/i.test(message)) return 'كلمة المرور قصيرة، استخدم 8 أحرف على الأقل';
+  if (/Password should be/i.test(message)) return 'كلمة المرور قصيرة، استخدم 6 أحرف أو أرقام على الأقل';
   if (/Email not confirmed/i.test(message)) return 'أكّد بريدك الإلكتروني أولاً من الرسالة المرسلة إليك';
   if (/Failed to fetch|NetworkError/i.test(message)) return 'تعذّر الاتصال بالخادم، تحقق من الإنترنت';
   return message;
