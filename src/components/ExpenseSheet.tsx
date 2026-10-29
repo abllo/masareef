@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
 import { ArrowSquareOut, Camera, ChatCircleText, CheckCircle, Receipt as ReceiptIcon, Sparkle, Trash } from '@phosphor-icons/react';
 import { useCards, useCategories, useDeleteExpense, useSaveExpense } from '../hooks/queries';
-import { useMemberName } from '../hooks/household';
+import { useCanEdit, useMemberName } from '../hooks/household';
 import { receiptUrl } from '../lib/api';
 import { addDays, formatDayLabel, todayISO } from '../lib/dates';
 import { formatSAR, parseAmount, toInputValue } from '../lib/money';
@@ -56,6 +56,8 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
   const save = useSaveExpense();
   const remove = useDeleteExpense();
   const memberName = useMemberName();
+  const canEdit = useCanEdit();
+  const readOnly = Boolean(expense && !canEdit(expense.created_by));
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [amountText, setAmountText] = useState(
@@ -74,6 +76,7 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (readOnly) return;
     setTouched(true);
     if (!amount) return toast.error('أدخل مبلغاً صحيحاً');
     if (!categoryId) return toast.error('اختر التصنيف');
@@ -119,6 +122,7 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
 
   return (
     <form onSubmit={submit} className="space-y-5 pb-2">
+      <fieldset disabled={readOnly} className="min-w-0 space-y-5">
       {/* المبلغ: أكبر عنصر في الشاشة لأنه أول ما يُكتب */}
       <label className="block rounded-3xl bg-surface-2 px-4 py-5 text-center">
         <span className="sr-only">المبلغ بالريال</span>
@@ -185,6 +189,7 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
         <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden"
           onChange={(e) => setReceipt(e.target.files?.[0] ?? null)} />
       </div>
+      </fieldset>
 
       {expense?.sms_meta && <SmsDetails expense={expense} />}
 
@@ -212,6 +217,11 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
         </div>
       )}
 
+      {readOnly ? (
+        <p className="rounded-2xl bg-surface-2 px-4 py-3 text-sm text-muted">
+          أضافها {memberName(expense!.created_by)}. تعديلها وحذفها لصاحبها أو لمنشئ العائلة.
+        </p>
+      ) : (
       <div className="flex gap-2">
         <Button type="submit" loading={save.isPending} className="flex-1">
           {expense ? 'حفظ التعديل' : amount ? `إضافة ${formatSAR(amount)}` : 'إضافة'}
@@ -223,6 +233,7 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
           </ConfirmButton>
         )}
       </div>
+      )}
       {expense?.recurring_id && (
         <p className="text-xs text-muted">هذه دفعة مصروف ثابت. حذفها يعيد حالته إلى «غير مدفوع» لهذا الشهر.</p>
       )}

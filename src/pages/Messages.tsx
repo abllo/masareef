@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { ArrowsClockwise, ChatCircleText, CheckCircle, Copy, LinkSimple, PlusCircle, Prohibit, Sparkle, Trash } from '@phosphor-icons/react';
 import { useExpenseSheet } from '../components/Layout';
 import { Button, EmptyState, IconButton, Spinner, cx } from '../components/ui';
+import { useCanEdit } from '../hooks/household';
 import { useInvalidate, useSmsLog } from '../hooks/queries';
 import { deleteSmsLog, fetchExpense } from '../lib/api';
 import { formatDayLabel, todayISO } from '../lib/dates';
@@ -95,6 +96,7 @@ export default function Messages() {
 function MessageItem({ m }: { m: SmsLogEntry }) {
   const openSheet = useExpenseSheet();
   const invalidate = useInvalidate();
+  const canEdit = useCanEdit();
   const [expanded, setExpanded] = useState(false);
   const s = STATUS[m.status];
   const r = m.result;
@@ -174,9 +176,11 @@ function MessageItem({ m }: { m: SmsLogEntry }) {
             <Copy className="size-4" weight="bold" />
           </IconButton>
         )}
-        <IconButton label="حذف من السجل" className="size-8" onClick={remove}>
-          <Trash className="size-4" weight="bold" />
-        </IconButton>
+        {canEdit(m.user_id ?? '') && (
+          <IconButton label="حذف من السجل" className="size-8" onClick={remove}>
+            <Trash className="size-4" weight="bold" />
+          </IconButton>
+        )}
       </div>
     </li>
   );

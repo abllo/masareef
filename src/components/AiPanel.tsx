@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import {
   ArrowCounterClockwise, CaretLeft, ChatCircleText, CheckCircle, MagicWand, Sparkle, Trash, WarningCircle,
 } from '@phosphor-icons/react';
-import { useHousehold } from '../hooks/household';
+import { useHousehold, useIsOwner } from '../hooks/household';
 import { CATEGORY_DEPENDENT, useAiStatus, useCategories, useCategoryAudit, useInvalidate, useRules } from '../hooks/queries';
 import { applyCategoryPlan, deleteRule, previewSms, requestCategoryPlan, undoCategoryBatch } from '../lib/api';
 import { formatDayShort } from '../lib/dates';
@@ -44,12 +44,13 @@ function auditLabel(a: CategoryAudit): string {
 }
 
 export function AiPanel() {
+  const isOwner = useIsOwner();
   return (
     <Card className="space-y-5">
       <AiStatusHeader />
       <SmsTester />
-      <CategoryOrganizer />
-      <RulesList />
+      {isOwner && <CategoryOrganizer />}
+      {isOwner && <RulesList />}
     </Card>
   );
 }

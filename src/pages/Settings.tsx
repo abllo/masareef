@@ -7,7 +7,7 @@ import { AiPanel } from '../components/AiPanel';
 import { CardsSection } from '../components/CardsSection';
 import { NotificationsCard } from '../components/Notifications';
 import { Button, Card, CategoryIcon, ConfirmButton, Field, IconButton, Sheet, cx } from '../components/ui';
-import { useHousehold } from '../hooks/household';
+import { useHousehold, useIsOwner } from '../hooks/household';
 import { useCategories, useDeleteCategory, useInvalidate, useSaveCategory, useUpdateHousehold } from '../hooks/queries';
 import {
   fetchSmsToken, leaveHousehold, regenerateInviteCode, regenerateSmsToken, removeMember, translateError,
@@ -18,6 +18,9 @@ import { SUPABASE_KEY, SUPABASE_URL, supabase } from '../lib/supabase';
 import type { Category } from '../lib/types';
 
 export default function Settings() {
+  const isOwner = useIsOwner();
+  const { members } = useHousehold();
+  const owner = members.find((m) => m.role === 'owner');
   return (
     <div className="space-y-5 pt-4">
       <h1 className="text-xl font-bold">الإعدادات</h1>
@@ -26,8 +29,17 @@ export default function Settings() {
       <FamilySection />
       <SmsSection />
       <AiPanel />
-      <CardsSection />
-      <CategoriesSection />
+      {isOwner ? (
+        <>
+          <CardsSection />
+          <CategoriesSection />
+        </>
+      ) : (
+        <p className="rounded-card bg-surface-2 px-5 py-4 text-sm leading-relaxed text-muted">
+          إدارة التصنيفات والبطاقات والميزانية والمصاريف الثابتة لمنشئ العائلة{owner ? ` (${owner.display_name})` : ''}.
+          تقدر تضيف مصاريفك وتعدّلها، وتتحكم بإشعاراتك وكلمة مرورك.
+        </p>
+      )}
       <PasswordSection />
       <Button variant="ghost" className="w-full text-danger" onClick={() => supabase.auth.signOut()}>
         <SignOut className="size-5" weight="bold" /> تسجيل الخروج
@@ -47,6 +59,7 @@ async function copyText(text: string, message: string) {
 
 function BudgetSection() {
   const { household } = useHousehold();
+  const isOwner = useIsOwner();
   const update = useUpdateHousehold();
   const [text, setText] = useState(household.monthly_budget ? toInputValue(household.monthly_budget) : '');
 
@@ -62,13 +75,13 @@ function BudgetSection() {
     <Card>
       <h2 className="inline-flex items-center gap-2 font-bold"><Target className="size-5 text-brand" weight="duotone" />الميزانية الشهرية</h2>
       <p className="mt-1 text-sm text-muted">
-        {household.monthly_budget ? `الحالية: ${formatSAR(household.monthly_budget)}` : 'لم تُحدَّد بعد. اتركها فارغة لإلغائها.'}
+        {household.monthly_budget ? `الحالية: ${formatSAR(household.monthly_budget)}` : isOwner ? 'لم تُحدَّد بعد. اتركها فارغة لإلغائها.' : 'لم تُحدَّد بعد.'}
       </p>
-      <form onSubmit={submit} className="mt-4 flex items-end gap-2">
+      {isOwner && <form onSubmit={submit} className="mt-4 flex items-end gap-2">
         <Field label="المبلغ (ر.س)" inputMode="decimal" dir="ltr" placeholder="مثال: 12000" className="flex-1"
           value={text} onChange={(e) => setText(e.target.value)} />
         <Button type="submit" loading={update.isPending}>حفظ</Button>
-      </form>
+      </form>}
     </Card>
   );
 }

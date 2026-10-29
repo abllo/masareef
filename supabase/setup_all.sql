@@ -1,6 +1,6 @@
 -- =====================================================================
 --  ملف الإعداد الكامل لقاعدة البيانات (مشروع Supabase جديد)
---  = 0001 + 0002 + 0003 + 0005 + 0006 + 0007 + 0008 + 0009 بالترتيب (0004 غير مطلوب لقاعدة جديدة)
+--  = 0001 + 0002 + 0003 + 0005 + 0006 + 0007 + 0008 + 0009 + 0010 + 0011 بالترتيب (0004 غير مطلوب لقاعدة جديدة)
 --  الصق الملف كله مرة وحدة في SQL Editor واضغط Run
 --  (لا تشغّله مرة ثانية على قاعدة فيها بيانات)
 -- =====================================================================
@@ -2561,6 +2561,708 @@ revoke all on function public.years_overview() from public, anon;
 revoke all on function public.archive_year(int, text) from public, anon;
 grant execute on function public.years_overview() to authenticated;
 grant execute on function public.archive_year(int, text) to authenticated;
+
+notify pgrst, 'reload schema';
+
+
+-- ───────────── 0010_push.sql ─────────────
+-- =====================================================================
+--  0010: إشعارات التطبيق (Web Push) بدل إشعارات الاختصارات
+--   الأنواع (كلها مفعّلة افتراضياً، وكل شخص يتحكم بها من الإعدادات):
+--     self       مصروفك المسجّل من رسالة البنك
+--     family     مصاريف بقية العائلة
+--     budget     الميزانية عند 80% و 100%
+--     recurring  المصاريف الثابتة يوم موعدها
+--     monthly    ملخص الشهر (أول يوم) وملخص السنة (1 يناير)
+--     sms_issue  رسالة بنك ما سُجّلت (مرفوضة، بدون مبلغ، …)
+--   - قاعدة البيانات تنادي دالة «push» (Edge Function) بدون انتظار، والدالة تبني الرسائل
+--     من الدوال هنا وترسلها مشفّرة للأجهزة
+--   - مفاتيح VAPID تولّدها الدالة نفسها أول مرة وتحفظها هنا (لا تمر على أحد)
+--   - أي فشل في الإشعار لا يوقف تسجيل المصروف أبداً
+-- =====================================================================
+
+create extension if not exists pg_net;
+create extension if not exists pg_cron;
+
+-- إعدادات الإرسال (للخادم فقط: لا سياسات RLS = لا وصول للمستخدمين)
+create table if not exists public.push_config (
+  id            int primary key default 1 check (id = 1),
+  vapid_public  text,
+  vapid_private jsonb,
+  hook_secret   text not null default replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''),
+  function_url  text,
+  subject       text not null default 'https://abllo.github.io/masareef/'
+);
+insert into public.push_config (id) values (1) on conflict do nothing;
+alter table public.push_config enable row level security;
+revoke all on public.push_config from anon, authenticated;
+
+-- اشتراكات الأجهزة
+create table if not exists public.push_subscriptions (
+  endpoint     text primary key,
+  household_id uuid not null references public.households(id) on delete cascade,
+  user_id      uuid not null references auth.users(id) on delete cascade,
+  p256dh       text not null,
+  auth         text not null,
+  device       text,
+  created_at   timestamptz not null default now(),
+  last_ok_at   timestamptz
+);
+create index if not exists push_subscriptions_household on public.push_subscriptions (household_id);
+alter table public.push_subscriptions enable row level security;
+drop policy if exists push_subscriptions_own on public.push_subscriptions;
+create policy push_subscriptions_own on public.push_subscriptions for select to authenticated using (user_id = auth.uid());
+revoke insert, update, delete on public.push_subscriptions from anon, authenticated;
+
+-- تفضيلات كل شخص (تنطبق على كل أجهزته) — الكل مفعّل افتراضياً
+alter table public.household_members
+  add column if not exists notify_prefs jsonb not null
+  default '{"self": true, "family": true, "budget": true, "recurring": true, "monthly": true, "sms_issue": true}';
+
+-- مبلغ مقروء: 3,200 ر.س / 45.50 ر.س
+create or replace function public.fmt_sar(h bigint)
+returns text language sql immutable as $$
+  select regexp_replace(to_char(h / 100.0, 'FM999,999,999,990.00'), '\.00$', '') || ' ر.س'
+$$;
+
+create or replace function public.ar_month(p date)
+returns text language sql immutable as $$
+  select (array['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'])[extract(month from p)::int]
+$$;
+
+-- ---------- للتطبيق ----------
+create or replace function public.push_subscribe(p_endpoint text, p_p256dh text, p_auth text, p_device text default null)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_h uuid := public.my_household();
+begin
+  if v_h is null then raise exception 'not in a household'; end if;
+  if p_endpoint !~ '^https://' or length(p_endpoint) > 1000 or coalesce(p_p256dh, '') = '' or coalesce(p_auth, '') = '' then
+    raise exception 'invalid subscription';
+  end if;
+  insert into push_subscriptions (endpoint, household_id, user_id, p256dh, auth, device)
+  values (p_endpoint, v_h, auth.uid(), p_p256dh, p_auth, left(p_device, 120))
+  on conflict (endpoint) do update
+    set household_id = excluded.household_id, user_id = excluded.user_id, p256dh = excluded.p256dh,
+        auth = excluded.auth, device = coalesce(excluded.device, push_subscriptions.device);
+end $$;
+
+create or replace function public.push_unsubscribe(p_endpoint text)
+returns void language sql security definer set search_path = public as $$
+  delete from push_subscriptions where endpoint = p_endpoint and user_id = auth.uid()
+$$;
+
+create or replace function public.push_set_prefs(p_prefs jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v jsonb; k text; v_clean jsonb := '{}';
+begin
+  foreach k in array array['self', 'family', 'budget', 'recurring', 'monthly', 'sms_issue'] loop
+    if jsonb_typeof(p_prefs->k) = 'boolean' then v_clean := v_clean || jsonb_build_object(k, p_prefs->k); end if;
+  end loop;
+  update household_members set notify_prefs = notify_prefs || v_clean where user_id = auth.uid()
+  returning notify_prefs into v;
+  return v;
+end $$;
+
+create or replace function public.my_push_status()
+returns jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object(
+    'prefs', (select notify_prefs from household_members where user_id = auth.uid()),
+    'devices', (select count(*) from push_subscriptions where user_id = auth.uid()),
+    'public_key', (select vapid_public from push_config where id = 1))
+$$;
+
+-- ---------- للدالة فقط (service_role) ----------
+create or replace function public.push_config_get()
+returns jsonb language sql stable security definer set search_path = public as $$
+  select to_jsonb(c) from push_config c where id = 1
+$$;
+
+-- يحفظ المفاتيح أول مرة فقط (لو تسابق طلبان يبقى الأول)
+create or replace function public.push_config_set(p_public text, p_private jsonb, p_function_url text)
+returns jsonb language sql security definer set search_path = public as $$
+  update push_config
+     set vapid_private = case when vapid_public is null then p_private else vapid_private end,
+         vapid_public  = coalesce(vapid_public, p_public),
+         function_url  = coalesce(p_function_url, function_url)
+   where id = 1
+  returning to_jsonb(push_config.*)
+$$;
+
+create or replace function public.push_result(p_endpoint text, p_ok boolean)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if p_ok then update push_subscriptions set last_ok_at = now() where endpoint = p_endpoint;
+  else delete from push_subscriptions where endpoint = p_endpoint; -- الجهاز ألغى الاشتراك
+  end if;
+end $$;
+
+-- أجهزة المستهدفين مع الرسالة (حسب تفضيل كل شخص)
+create or replace function public.push_to(p_household uuid, p_pref text, p_payload jsonb,
+                                          p_only uuid default null, p_except uuid default null)
+returns jsonb language sql stable security definer set search_path = public as $$
+  select coalesce(jsonb_agg(jsonb_build_object('endpoint', s.endpoint, 'p256dh', s.p256dh, 'auth', s.auth, 'payload', p_payload)), '[]')
+  from push_subscriptions s
+  join household_members m on m.user_id = s.user_id and m.household_id = s.household_id
+  where s.household_id = p_household
+    and (p_only is null or s.user_id = p_only)
+    and (p_except is null or s.user_id <> p_except)
+    and coalesce((m.notify_prefs->>p_pref)::boolean, true)
+$$;
+
+-- مصروف جديد: لصاحبه (من رسالة البنك) + للعائلة + تنبيه الميزانية
+create or replace function public.push_expense_messages(p_expense uuid)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  e record;
+  v_label text; v_amount text; v_by text; v_line text;
+  v_month date; v_total bigint; v_before bigint; v_budget bigint;
+  v_today date := (now() at time zone 'Asia/Riyadh')::date;
+  v_out jsonb := '[]';
+  v_title text; v_body text;
+begin
+  select x.*, c.name as cat into e from expenses x join categories c on c.id = x.category_id where x.id = p_expense;
+  if not found then return '[]'; end if;
+
+  v_label  := coalesce(nullif(e.sms_meta->>'merchant', ''), nullif(regexp_replace(coalesce(e.description, ''), '^📩\s*', ''), ''));
+  v_amount := public.fmt_sar(e.amount)
+              || coalesce(' (' || (e.sms_meta->>'original_amount') || ' ' || (e.sms_meta->>'original_currency') || ')', '');
+  v_month  := date_trunc('month', e.expense_date)::date;
+  select coalesce(sum(amount), 0) into v_total from expenses
+   where household_id = e.household_id and expense_date >= v_month and expense_date < (v_month + interval '1 month')::date;
+  v_before := v_total - e.amount;
+  select display_name into v_by from household_members where household_id = e.household_id and user_id = e.created_by;
+  v_line := coalesce(v_label || ' ← ', '') || e.cat || E'\n' || 'مجموع ' || public.ar_month(v_month) || ': ' || public.fmt_sar(v_total);
+
+  -- 1) صاحب العملية: ما سُجّل تلقائياً من رسالة البنك
+  if e.source_hash is not null then
+    v_out := v_out || public.push_to(e.household_id, 'self',
+      jsonb_build_object('title', 'تم تسجيل ' || v_amount, 'body', v_line, 'tag', 'exp-' || e.id, 'url', './#/expenses'),
+      p_only => e.created_by);
+  end if;
+
+  -- 2) بقية العائلة
+  v_out := v_out || public.push_to(e.household_id, 'family',
+    jsonb_build_object('title', coalesce(v_by, 'العائلة') || ': ' || v_amount, 'body', v_line, 'tag', 'exp-' || e.id, 'url', './#/expenses'),
+    p_except => e.created_by);
+
+  -- 3) الميزانية: عند تجاوز 80% أو 100% لأول مرة في الشهر الحالي
+  select monthly_budget into v_budget from households where id = e.household_id;
+  if v_budget > 0 and v_month = date_trunc('month', v_today)::date then
+    if v_before < v_budget and v_total >= v_budget then
+      v_title := 'تجاوزتم ميزانية ' || public.ar_month(v_month);
+      v_body  := 'المصروف ' || public.fmt_sar(v_total) || ' من ' || public.fmt_sar(v_budget)
+                 || ' (زيادة ' || public.fmt_sar(v_total - v_budget) || ')';
+    elsif v_before * 10 < v_budget * 8 and v_total * 10 >= v_budget * 8 then
+      v_title := 'وصلتم 80% من ميزانية ' || public.ar_month(v_month);
+      v_body  := 'المصروف ' || public.fmt_sar(v_total) || ' من ' || public.fmt_sar(v_budget)
+                 || ' · المتبقي ' || public.fmt_sar(v_budget - v_total);
+    end if;
+    if v_title is not null then
+      v_out := v_out || public.push_to(e.household_id, 'budget',
+        jsonb_build_object('title', v_title, 'body', v_body, 'tag', 'budget-' || v_month, 'url', './'));
+    end if;
+  end if;
+  return v_out;
+end $$;
+
+-- رسالة بنك ما سُجّلت: لمن أرسلها
+create or replace function public.push_sms_messages(p_log uuid)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare l record;
+begin
+  select * into l from sms_log where id = p_log;
+  if not found or l.status <> 'ignored' or l.message is null or l.user_id is null then return '[]'; end if;
+  return public.push_to(l.household_id, 'sms_issue',
+    jsonb_build_object(
+      'title', case when l.reason ~ 'مرفوضة|ملغاة' then '⚠️ ' || l.reason else 'رسالة بنك ما سجّلتها' end,
+      'body', case when l.reason ~ 'مرفوضة|ملغاة' then '' else coalesce(l.reason, '') || E'\n' end
+              || left(regexp_replace(public.sms_mask(l.message), '\s+', ' ', 'g'), 110),
+      'tag', 'sms-' || l.id, 'url', './#/messages'),
+    p_only => l.user_id);
+end $$;
+
+-- يومياً 9 الصبح: الثابتة المستحقة اليوم + ملخص الشهر (يوم 1) + ملخص السنة (1 يناير)
+create or replace function public.push_daily_messages(p_today date default null)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v_today date := coalesce(p_today, (now() at time zone 'Asia/Riyadh')::date);
+  v_month date := date_trunc('month', v_today)::date;
+  v_last  int  := extract(day from (v_month + interval '1 month - 1 day'))::int;
+  v_out jsonb := '[]';
+  h record; r record;
+  v_items text[]; v_sum bigint; v_n int; v_first text;
+  v_prev date; v_prev2 date; v_t1 bigint; v_t2 bigint; v_top text; v_body text;
+  v_y int; v_y1 bigint; v_y2 bigint;
+begin
+  for h in select distinct household_id as id from push_subscriptions loop
+    -- 1) الثابتة المستحقة اليوم ولم تُدفع هذا الشهر
+    v_items := '{}'; v_sum := 0; v_n := 0; v_first := null;
+    for r in
+      select re.name, re.amount from recurring_expenses re
+      where re.household_id = h.id and re.is_active and re.start_month <= v_month
+        and least(re.day_of_month, v_last) = extract(day from v_today)::int
+        and not exists (select 1 from expenses x where x.recurring_id = re.id and x.recurring_period = v_month)
+      order by re.amount desc
+    loop
+      v_items := v_items || (r.name || ' ' || public.fmt_sar(r.amount)); v_sum := v_sum + r.amount; v_n := v_n + 1;
+      v_first := coalesce(v_first, r.name || ' ' || public.fmt_sar(r.amount));
+    end loop;
+    if v_n > 0 then
+      v_out := v_out || public.push_to(h.id, 'recurring', jsonb_build_object(
+        'title', case when v_n = 1 then 'موعد دفع اليوم: ' || v_first else v_n || ' مصاريف ثابتة موعدها اليوم (' || public.fmt_sar(v_sum) || ')' end,
+        'body', case when v_n = 1 then '' else array_to_string(v_items, ' · ') || E'\n' end || 'سجّل الدفع من صفحة الثابتة',
+        'tag', 'recurring-' || v_today, 'url', './#/recurring'));
+    end if;
+
+    -- 2) ملخص الشهر الماضي (أول يوم في الشهر)
+    if extract(day from v_today) = 1 then
+      v_prev := (v_month - interval '1 month')::date; v_prev2 := (v_month - interval '2 month')::date;
+      select coalesce(sum(total), 0) into v_t1 from monthly_category_totals where household_id = h.id and month = v_prev;
+      select coalesce(sum(total), 0) into v_t2 from monthly_category_totals where household_id = h.id and month = v_prev2;
+      select c.name || ' ' || public.fmt_sar(sum(t.total)::bigint) into v_top
+        from monthly_category_totals t join categories c on c.id = t.category_id
+       where t.household_id = h.id and t.month = v_prev group by c.name order by sum(t.total) desc limit 1;
+      if v_t1 > 0 then
+        v_body := case when v_t2 > 0 then
+                    case when v_t1 >= v_t2 then 'أعلى من ' || public.ar_month(v_prev2) || ' بـ ' || round((v_t1 - v_t2) * 100.0 / v_t2) || '%'
+                         else 'أقل من ' || public.ar_month(v_prev2) || ' بـ ' || round((v_t2 - v_t1) * 100.0 / v_t2) || '%' end
+                  else '' end;
+        v_body := concat_ws(' · ', nullif(v_body, ''), 'أعلى تصنيف: ' || v_top);
+        v_out := v_out || public.push_to(h.id, 'monthly', jsonb_build_object(
+          'title', 'ملخص ' || public.ar_month(v_prev) || ': ' || public.fmt_sar(v_t1),
+          'body', v_body, 'tag', 'month-' || v_prev, 'url', './'));
+      end if;
+    end if;
+
+    -- 3) ملخص السنة الماضية (1 يناير)
+    if extract(month from v_today) = 1 and extract(day from v_today) = 1 then
+      v_y := extract(year from v_today)::int - 1;
+      select coalesce(sum(total), 0) into v_y1 from monthly_category_totals
+       where household_id = h.id and month between make_date(v_y, 1, 1) and make_date(v_y, 12, 1);
+      select coalesce(sum(total), 0) into v_y2 from monthly_category_totals
+       where household_id = h.id and month between make_date(v_y - 1, 1, 1) and make_date(v_y - 1, 12, 1);
+      if v_y1 > 0 then
+        v_out := v_out || public.push_to(h.id, 'monthly', jsonb_build_object(
+          'title', 'ملخص سنة ' || v_y || ': ' || public.fmt_sar(v_y1),
+          'body', case when v_y2 > 0 then
+                    case when v_y1 >= v_y2 then 'أعلى من ' || (v_y - 1) || ' بـ ' || round((v_y1 - v_y2) * 100.0 / v_y2) || '%'
+                         else 'أقل من ' || (v_y - 1) || ' بـ ' || round((v_y2 - v_y1) * 100.0 / v_y2) || '%' end || ' · '
+                  else '' end || 'شوف المقارنة السنوية في التطبيق',
+          'tag', 'year-' || v_y, 'url', './#/years'));
+      end if;
+    end if;
+  end loop;
+  return v_out;
+end $$;
+
+-- إشعار تجربة لأجهزة شخص واحد
+create or replace function public.push_test_messages(p_user uuid)
+returns jsonb language sql stable security definer set search_path = public as $$
+  select coalesce(jsonb_agg(jsonb_build_object('endpoint', endpoint, 'p256dh', p256dh, 'auth', auth, 'payload',
+           jsonb_build_object('title', 'الإشعارات شغالة ✅', 'body', 'بيوصلك إشعار مثل هذا كل ما تسجّل رسالة بنك مصروفاً', 'tag', 'test', 'url', './'))), '[]')
+  from push_subscriptions where user_id = p_user
+$$;
+
+-- نداء غير متزامن للدالة (لا يؤخر شيئاً ولا يوقفه)
+create or replace function public.push_call(p_household uuid, p_kind text, p_id uuid default null)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_url text; v_secret text;
+begin
+  if not exists (select 1 from push_subscriptions where p_household is null or household_id = p_household) then return; end if;
+  select function_url, hook_secret into v_url, v_secret from push_config where id = 1;
+  if v_url is null then return; end if;
+  perform net.http_post(
+    url := v_url,
+    body := jsonb_build_object('secret', v_secret, 'kind', p_kind, 'id', p_id),
+    headers := '{"Content-Type": "application/json"}'::jsonb,
+    timeout_milliseconds := 15000);
+exception when others then
+  null; -- الإشعار لا يوقف أي عملية
+end $$;
+
+create or replace function public.expenses_push_hook()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  perform public.push_call(new.household_id, 'expense', new.id);
+  return null;
+end $$;
+drop trigger if exists expenses_push on public.expenses;
+create trigger expenses_push after insert on public.expenses for each row execute function public.expenses_push_hook();
+
+create or replace function public.sms_log_push_hook()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  perform public.push_call(new.household_id, 'sms', new.id);
+  return null;
+end $$;
+drop trigger if exists sms_log_push on public.sms_log;
+create trigger sms_log_push after insert on public.sms_log for each row
+  when (new.status = 'ignored' and new.message is not null)
+  execute function public.sms_log_push_hook();
+
+-- الجدولة اليومية: 6:00 UTC = 9:00 الصبح بتوقيت الرياض
+select cron.unschedule(jobid) from cron.job where jobname = 'masareef-daily';
+select cron.schedule('masareef-daily', '0 6 * * *', 'select public.push_call(null, ''daily'')');
+
+revoke all on function public.fmt_sar(bigint) from public, anon;
+revoke all on function public.ar_month(date) from public, anon;
+revoke all on function public.push_subscribe(text, text, text, text) from public, anon;
+revoke all on function public.push_unsubscribe(text) from public, anon;
+revoke all on function public.push_set_prefs(jsonb) from public, anon;
+revoke all on function public.my_push_status() from public, anon;
+grant execute on function public.push_subscribe(text, text, text, text) to authenticated;
+grant execute on function public.push_unsubscribe(text) to authenticated;
+grant execute on function public.push_set_prefs(jsonb) to authenticated;
+grant execute on function public.my_push_status() to authenticated;
+
+revoke all on function public.push_config_get() from public, anon, authenticated;
+revoke all on function public.push_config_set(text, jsonb, text) from public, anon, authenticated;
+revoke all on function public.push_result(text, boolean) from public, anon, authenticated;
+revoke all on function public.push_to(uuid, text, jsonb, uuid, uuid) from public, anon, authenticated;
+revoke all on function public.push_expense_messages(uuid) from public, anon, authenticated;
+revoke all on function public.push_sms_messages(uuid) from public, anon, authenticated;
+revoke all on function public.push_daily_messages(date) from public, anon, authenticated;
+revoke all on function public.push_test_messages(uuid) from public, anon, authenticated;
+revoke all on function public.push_call(uuid, text, uuid) from public, anon, authenticated;
+revoke all on function public.expenses_push_hook() from public, anon, authenticated;
+revoke all on function public.sms_log_push_hook() from public, anon, authenticated;
+grant execute on function public.push_config_get() to service_role;
+grant execute on function public.push_config_set(text, jsonb, text) to service_role;
+grant execute on function public.push_result(text, boolean) to service_role;
+grant execute on function public.push_expense_messages(uuid) to service_role;
+grant execute on function public.push_sms_messages(uuid) to service_role;
+grant execute on function public.push_daily_messages(date) to service_role;
+grant execute on function public.push_test_messages(uuid) to service_role;
+
+notify pgrst, 'reload schema';
+
+
+-- ───────────── 0011_admin.sql ─────────────
+-- =====================================================================
+--  0011: الإدارة لمنشئ العائلة فقط
+--   المنشئ (owner): التصنيفات وتنظيمها، الميزانية واسم العائلة ورسوم العملات، البطاقات،
+--                   المصاريف الثابتة، القواعد المتعلَّمة، الأعضاء ورمز الدعوة، أرشفة السنوات
+--   بقية العائلة: يضيفون مصاريفهم ويعدّلون/يحذفون ما أضافوه، يسجّلون دفع الثابتة،
+--                 يشوفون كل شيء، ويتحكمون بإشعاراتهم واسمهم وكلمة مرورهم
+-- =====================================================================
+
+create or replace function public.is_owner(p_household uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from household_members
+                 where household_id = p_household and user_id = auth.uid() and role = 'owner')
+$$;
+revoke all on function public.is_owner(uuid) from public, anon;
+grant execute on function public.is_owner(uuid) to authenticated;
+
+-- العائلة: الإعدادات للمنشئ
+drop policy if exists households_update on public.households;
+create policy households_update on public.households for update to authenticated
+  using (public.is_owner(id)) with check (public.is_owner(id));
+
+-- التصنيفات / الثابتة / البطاقات / القواعد: الكل يشوف، والمنشئ يعدّل
+drop policy if exists categories_all on public.categories;
+drop policy if exists categories_select on public.categories;
+drop policy if exists categories_owner on public.categories;
+create policy categories_select on public.categories for select to authenticated using (public.is_member(household_id));
+create policy categories_owner on public.categories for all to authenticated
+  using (public.is_owner(household_id)) with check (public.is_owner(household_id));
+
+drop policy if exists recurring_all on public.recurring_expenses;
+drop policy if exists recurring_select on public.recurring_expenses;
+drop policy if exists recurring_owner on public.recurring_expenses;
+create policy recurring_select on public.recurring_expenses for select to authenticated using (public.is_member(household_id));
+create policy recurring_owner on public.recurring_expenses for all to authenticated
+  using (public.is_owner(household_id)) with check (public.is_owner(household_id));
+
+drop policy if exists cards_all on public.cards;
+drop policy if exists cards_select on public.cards;
+drop policy if exists cards_owner on public.cards;
+create policy cards_select on public.cards for select to authenticated using (public.is_member(household_id));
+create policy cards_owner on public.cards for all to authenticated
+  using (public.is_owner(household_id)) with check (public.is_owner(household_id));
+
+drop policy if exists merchant_rules_all on public.merchant_rules;
+drop policy if exists merchant_rules_select on public.merchant_rules;
+drop policy if exists merchant_rules_owner on public.merchant_rules;
+create policy merchant_rules_select on public.merchant_rules for select to authenticated using (public.is_member(household_id));
+create policy merchant_rules_owner on public.merchant_rules for all to authenticated
+  using (public.is_owner(household_id)) with check (public.is_owner(household_id));
+
+-- المصاريف: كل شخص يعدّل ويحذف ما أضافه، والمنشئ يعدّل الكل
+drop policy if exists expenses_update on public.expenses;
+create policy expenses_update on public.expenses for update to authenticated
+  using (public.is_member(household_id) and (created_by = (select auth.uid()) or public.is_owner(household_id)))
+  with check (public.is_member(household_id));
+drop policy if exists expenses_delete on public.expenses;
+create policy expenses_delete on public.expenses for delete to authenticated
+  using (public.is_member(household_id) and (created_by = (select auth.uid()) or public.is_owner(household_id)));
+
+-- سجل الرسائل: كل شخص يحذف رسائله، والمنشئ الكل
+drop policy if exists sms_log_delete on public.sms_log;
+create policy sms_log_delete on public.sms_log for delete to authenticated
+  using (public.is_member(household_id) and (user_id = (select auth.uid()) or public.is_owner(household_id)));
+
+-- تسجيل دفع الثابتة متاح للكل (يربط رسالة البنك حتى لو سجّلها شخص آخر)
+create or replace function public.mark_recurring_paid(p_recurring_id uuid, p_period date, p_date date default null)
+returns uuid
+language plpgsql security definer set search_path = public
+as $$
+declare
+  r public.recurring_expenses;
+  v_period date := date_trunc('month', p_period)::date;
+  v_id uuid;
+begin
+  select * into r from recurring_expenses where id = p_recurring_id;
+  if r.id is null or not public.is_member(r.household_id) then raise exception 'recurring expense not found'; end if;
+
+  select id into v_id from expenses where recurring_id = r.id and recurring_period = v_period;
+  if v_id is not null then return v_id; end if;
+
+  select id into v_id from expenses
+  where household_id = r.household_id and recurring_id is null and source_hash is not null
+    and amount = r.amount and date_trunc('month', expense_date)::date = v_period
+  order by expense_date, created_at
+  limit 1
+  for update;
+  if v_id is not null then
+    update expenses set recurring_id = r.id, recurring_period = v_period, category_id = r.category_id
+    where id = v_id;
+    return v_id;
+  end if;
+
+  insert into expenses (household_id, category_id, amount, expense_date, description, recurring_id, recurring_period)
+  values (
+    r.household_id, r.category_id, r.amount,
+    coalesce(p_date, (now() at time zone 'Asia/Riyadh')::date),
+    r.name, r.id, v_period
+  )
+  on conflict (recurring_id, recurring_period) do nothing
+  returning id into v_id;
+
+  if v_id is null then
+    select id into v_id from expenses where recurring_id = r.id and recurring_period = v_period;
+  end if;
+  return v_id;
+end $$;
+
+-- تنظيم التصنيفات بالذكاء الاصطناعي: للمنشئ فقط
+create or replace function public.ai_category_plan()
+returns jsonb language plpgsql security definer set search_path = public
+set statement_timeout to '70s'
+as $$
+declare v_h uuid := public.my_household(); v_names text[]; v_plan jsonb;
+begin
+  if not public.is_owner(v_h) then raise exception 'only the owner can do this'; end if;
+  if v_h is null then raise exception 'not in a household'; end if;
+  if not public.ai_enabled() then raise exception 'ai not enabled'; end if;
+  select array_agg(name) into v_names from categories where household_id = v_h;
+
+  v_plan := public.ai_call('plan',
+    $sys$You organise the expense categories of a Saudi family budget app. Goal: a clean, unified, reasonably small set of clear Arabic categories, without losing any data. You receive every category with its usage and top merchants, plus merchants that appear in several categories.
+Propose only changes that clearly help; an empty list of operations is a valid answer. Allowed operations:
+- merge (from → into): duplicates or near-duplicates (e.g. "مطاعم" and "المطاعم والمقاهي"). Everything moves into "into" and "from" is archived.
+- move_merchant (merchant → into): put all expenses of one merchant into the right category, to unify inconsistent merchants or rescue merchants sitting in the "other" category.
+- create (name, icon): only when at least 3 expenses (in "other" or spread elsewhere) clearly form a common spending area with no category; then add move_merchant operations for those merchants.
+- rename (from → new_name): only for unclear or awkward names.
+- archive (from): family-created categories with no expenses in 90 days and no recurring expenses.
+- delete (from): only categories with expenses_total = 0 and recurring = 0.
+Core categories (is_core = true) are pinned: never merge them away, rename, archive or delete them — but you may merge other categories INTO them and move merchants into or out of them. Never merge, rename, archive or delete the "other" category (is_other = true). Use the exact existing names. Write summary and reasons in short Arabic.$sys$,
+    'Data:' || E'\n' || public.category_stats(v_h)::text,
+    jsonb_build_object(
+      'name', 'category_plan',
+      'description', 'A safe plan to organise the categories.',
+      'input_schema', jsonb_build_object(
+        'type', 'object',
+        'properties', jsonb_build_object(
+          'summary', jsonb_build_object('type', 'string'),
+          'operations', jsonb_build_object('type', 'array', 'items', jsonb_build_object(
+            'type', 'object',
+            'properties', jsonb_build_object(
+              'op', jsonb_build_object('type', 'string', 'enum', jsonb_build_array('merge', 'move_merchant', 'create', 'rename', 'archive', 'delete')),
+              'from', jsonb_build_object('type', 'string', 'enum', to_jsonb(coalesce(v_names, '{}'))),
+              'into', jsonb_build_object('type', 'string'),
+              'merchant', jsonb_build_object('type', 'string'),
+              'name', jsonb_build_object('type', 'string'),
+              'new_name', jsonb_build_object('type', 'string'),
+              'icon', jsonb_build_object('type', 'string', 'enum', to_jsonb(public.allowed_icons())),
+              'reason', jsonb_build_object('type', 'string')),
+            'required', jsonb_build_array('op', 'reason')))),
+        'required', jsonb_build_array('summary', 'operations'))),
+    2500);
+  if v_plan is null then raise exception 'ai unavailable'; end if;
+  return v_plan;
+end $$;
+
+create or replace function public.apply_category_plan(p_operations jsonb, p_actor text default 'ai')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_h uuid := public.my_household();
+  v_batch uuid := gen_random_uuid();
+  op jsonb;
+  v_from categories; v_into categories;
+  v_ids uuid[]; v_rec uuid[]; v_rules jsonb; v_moves jsonb; v_prev jsonb;
+  v_key text; v_new uuid; v_label text;
+  v_applied jsonb := '[]'; v_skipped jsonb := '[]';
+  v_actor text := case when p_actor = 'user' then 'user' else 'ai' end;
+begin
+  if not public.is_owner(v_h) then raise exception 'only the owner can do this'; end if;
+  if v_h is null then raise exception 'not in a household'; end if;
+  perform set_config('masareef.no_learn', 'on', true);  -- التنظيم لا يُنشئ قواعد تلقائية من النقل
+
+  for op in select * from jsonb_array_elements(coalesce(p_operations, '[]')) loop
+    v_from := null; v_into := null;
+    select * into v_from from categories where household_id = v_h and name = op->>'from';
+    select * into v_into from categories where household_id = v_h and name = op->>'into';
+
+    case op->>'op'
+    when 'create' then
+      v_new := public.safe_create_category(v_h, op->>'name', op->>'icon', v_batch, v_actor);
+      if v_new is null then v_skipped := v_skipped || jsonb_build_array(op || '{"why":"اسم مكرر أو غير صالح أو وصلنا الحد"}'); continue; end if;
+
+    when 'rename' then
+      if v_from.id is null or v_from.icon = 'circle' or v_from.is_core or coalesce(btrim(op->>'new_name'), '') = ''
+         or exists (select 1 from categories where household_id = v_h and public.normalize_category(name) = public.normalize_category(op->>'new_name') and id <> v_from.id) then
+        v_skipped := v_skipped || jsonb_build_array(op || '{"why":"غير مسموح أو الاسم مستخدم"}'); continue;
+      end if;
+      update categories set name = left(btrim(op->>'new_name'), 40) where id = v_from.id;
+      insert into category_audit (household_id, batch_id, op, details, actor)
+      values (v_h, v_batch, 'rename', jsonb_build_object('id', v_from.id, 'old_name', v_from.name, 'new_name', btrim(op->>'new_name')), v_actor);
+
+    when 'merge' then
+      if v_from.id is null or v_into.id is null or v_from.id = v_into.id or v_from.icon = 'circle' or v_from.is_core or v_into.is_archived then
+        v_skipped := v_skipped || jsonb_build_array(op || '{"why":"غير مسموح (تصنيف أساسي أو غير موجود)"}'); continue;
+      end if;
+      select coalesce(array_agg(id), '{}') into v_ids from expenses where category_id = v_from.id;
+      select coalesce(array_agg(id), '{}') into v_rec from recurring_expenses where category_id = v_from.id;
+      select coalesce(jsonb_agg(merchant_key), '[]') into v_rules from merchant_rules where category_id = v_from.id;
+      update expenses set category_id = v_into.id where id = any (v_ids);
+      update recurring_expenses set category_id = v_into.id where id = any (v_rec);
+      update merchant_rules set category_id = v_into.id where category_id = v_from.id;
+      update categories set is_archived = true where id = v_from.id;
+      insert into category_audit (household_id, batch_id, op, details, actor)
+      values (v_h, v_batch, 'merge', jsonb_build_object('from_id', v_from.id, 'into_id', v_into.id, 'from_name', v_from.name, 'into_name', v_into.name,
+              'expense_ids', to_jsonb(v_ids), 'recurring_ids', to_jsonb(v_rec), 'rule_keys', v_rules, 'from_was_archived', v_from.is_archived), v_actor);
+
+    when 'archive' then
+      if v_from.id is null or v_from.icon = 'circle' or v_from.is_core or v_from.is_archived then
+        v_skipped := v_skipped || jsonb_build_array(op || '{"why":"غير مسموح (تصنيف أساسي أو غير موجود)"}'); continue;
+      end if;
+      update categories set is_archived = true where id = v_from.id;
+      insert into category_audit (household_id, batch_id, op, details, actor)
+      values (v_h, v_batch, 'archive', jsonb_build_object('id', v_from.id, 'name', v_from.name), v_actor);
+
+    when 'delete' then
+      if v_from.id is null or v_from.icon = 'circle' or v_from.is_core then
+        v_skipped := v_skipped || jsonb_build_array(op || '{"why":"تصنيف أساسي مثبّت"}'); continue;
+      end if;
+      if exists (select 1 from expenses where category_id = v_from.id)
+         or exists (select 1 from recurring_expenses where category_id = v_from.id) then
+        v_skipped := v_skipped || jsonb_build_array(op || '{"why":"عليه عمليات، يمكن أرشفته فقط"}'); continue;
+      end if;
+      select coalesce(jsonb_agg(to_jsonb(r)), '[]') into v_rules from merchant_rules r where category_id = v_from.id;
+      delete from categories where id = v_from.id;
+      insert into category_audit (household_id, batch_id, op, details, actor)
+      values (v_h, v_batch, 'delete', jsonb_build_object('category', to_jsonb(v_from), 'rules', v_rules), v_actor);
+
+    when 'move_merchant' then
+      if v_into.id is not null and v_into.is_archived then v_into := null; end if;
+      if v_into.id is null and op ? 'into' then
+        -- التصنيف قد يكون أُنشئ في نفس الخطة
+        select * into v_into from categories where household_id = v_h and not is_archived
+          and public.normalize_category(name) = public.normalize_category(op->>'into');
+      end if;
+      v_key := public.normalize_merchant(op->>'merchant');
+      if v_into.id is null or v_key is null then
+        v_skipped := v_skipped || jsonb_build_array(op || '{"why":"التصنيف أو المتجر غير موجود"}'); continue;
+      end if;
+      select coalesce(jsonb_agg(jsonb_build_object('id', id, 'category_id', category_id)), '[]') into v_moves
+      from expenses where household_id = v_h and recurring_id is null and category_id <> v_into.id
+        and (merchant_key = v_key or public.normalize_merchant(regexp_replace(coalesce(description, ''), '^📩\s*', '')) = v_key);
+      select to_jsonb(r) into v_prev from merchant_rules r where household_id = v_h and merchant_key = v_key;
+      update expenses set category_id = v_into.id
+      where id in (select (x->>'id')::uuid from jsonb_array_elements(v_moves) x);
+      v_label := btrim(op->>'merchant');
+      insert into merchant_rules (household_id, merchant_key, merchant_label, category_id, created_by)
+      values (v_h, v_key, v_label, v_into.id, auth.uid())
+      on conflict (household_id, merchant_key) do update set category_id = excluded.category_id, updated_at = now();
+      insert into category_audit (household_id, batch_id, op, details, actor)
+      values (v_h, v_batch, 'move_merchant', jsonb_build_object('merchant_key', v_key, 'merchant', v_label, 'into_id', v_into.id,
+              'into_name', v_into.name, 'moves', v_moves, 'previous_rule', v_prev), v_actor);
+
+    else
+      v_skipped := v_skipped || jsonb_build_array(op || '{"why":"عملية غير معروفة"}'); continue;
+    end case;
+    v_applied := v_applied || jsonb_build_array(op);
+  end loop;
+
+  perform set_config('masareef.no_learn', '', true);
+  return jsonb_build_object('batch_id', case when jsonb_array_length(v_applied) > 0 then v_batch end,
+                            'applied', v_applied, 'skipped', v_skipped);
+end $$;
+
+create or replace function public.undo_category_batch(p_batch uuid)
+returns int language plpgsql security definer set search_path = public as $$
+declare
+  v_h uuid := public.my_household();
+  a category_audit;
+  n int := 0;
+  x jsonb;
+begin
+  if not public.is_owner(v_h) then raise exception 'only the owner can do this'; end if;
+  if v_h is null then raise exception 'not in a household'; end if;
+  perform set_config('masareef.no_learn', 'on', true);
+  for a in select * from category_audit where household_id = v_h and batch_id = p_batch and undone_at is null order by created_at desc, id desc loop
+    case a.op
+    when 'create' then
+      if exists (select 1 from expenses where category_id = (a.details->>'id')::uuid)
+         or exists (select 1 from recurring_expenses where category_id = (a.details->>'id')::uuid) then
+        update categories set is_archived = true where id = (a.details->>'id')::uuid;
+      else
+        delete from categories where id = (a.details->>'id')::uuid;
+      end if;
+    when 'rename' then
+      update categories set name = a.details->>'old_name'
+      where id = (a.details->>'id')::uuid
+        and not exists (select 1 from categories where household_id = v_h and name = a.details->>'old_name' and id <> (a.details->>'id')::uuid);
+    when 'merge' then
+      update categories set is_archived = coalesce((a.details->>'from_was_archived')::boolean, false) where id = (a.details->>'from_id')::uuid;
+      update expenses set category_id = (a.details->>'from_id')::uuid
+      where id in (select (v #>> '{}')::uuid from jsonb_array_elements(a.details->'expense_ids') v)
+        and category_id = (a.details->>'into_id')::uuid;
+      update recurring_expenses set category_id = (a.details->>'from_id')::uuid
+      where id in (select (v #>> '{}')::uuid from jsonb_array_elements(a.details->'recurring_ids') v)
+        and category_id = (a.details->>'into_id')::uuid;
+      update merchant_rules set category_id = (a.details->>'from_id')::uuid
+      where household_id = v_h and merchant_key in (select v #>> '{}' from jsonb_array_elements(a.details->'rule_keys') v)
+        and category_id = (a.details->>'into_id')::uuid;
+    when 'archive' then
+      update categories set is_archived = false where id = (a.details->>'id')::uuid;
+    when 'delete' then
+      insert into categories select * from jsonb_populate_record(null::categories, a.details->'category')
+      on conflict do nothing;
+      for x in select * from jsonb_array_elements(a.details->'rules') loop
+        insert into merchant_rules select * from jsonb_populate_record(null::merchant_rules, x) on conflict do nothing;
+      end loop;
+    when 'move_merchant' then
+      update expenses e set category_id = (m->>'category_id')::uuid
+      from jsonb_array_elements(a.details->'moves') m
+      where e.id = (m->>'id')::uuid and e.category_id = (a.details->>'into_id')::uuid
+        and exists (select 1 from categories c where c.id = (m->>'category_id')::uuid);
+      if a.details->'previous_rule' is null or jsonb_typeof(a.details->'previous_rule') = 'null' then
+        delete from merchant_rules where household_id = v_h and merchant_key = a.details->>'merchant_key';
+      else
+        update merchant_rules set category_id = (a.details->'previous_rule'->>'category_id')::uuid,
+                                  merchant_label = a.details->'previous_rule'->>'merchant_label'
+        where household_id = v_h and merchant_key = a.details->>'merchant_key';
+      end if;
+    else null;
+    end case;
+    update category_audit set undone_at = now() where id = a.id;
+    n := n + 1;
+  end loop;
+  perform set_config('masareef.no_learn', '', true);
+  return n;
+end $$;
 
 notify pgrst, 'reload schema';
 

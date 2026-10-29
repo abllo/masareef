@@ -5,6 +5,7 @@ import { Button, Card, CategoryIcon, ConfirmButton, EmptyState, Field, MonthSwit
 import {
   useCategories, useDeleteExpense, useDeleteRecurring, useMarkPaid, useRecurring, useRecurringPayments, useSaveRecurring,
 } from '../hooks/queries';
+import { useIsOwner } from '../hooks/household';
 import { formatDayShort, monthOf, todayISO } from '../lib/dates';
 import { formatSAR, parseAmount, sumHalalas, toInputValue } from '../lib/money';
 import { recurringForMonth, type RecurringRow } from '../lib/recurring';
@@ -14,6 +15,7 @@ export default function RecurringPage() {
   const today = todayISO();
   const [month, setMonth] = useState(monthOf(today));
   const [editing, setEditing] = useState<{ open: boolean; item?: Recurring }>({ open: false });
+  const isOwner = useIsOwner();
 
   const { data: categories = [] } = useCategories();
   const recurring = useRecurring();
@@ -45,14 +47,18 @@ export default function RecurringPage() {
           {rows.map((row) => (
             <RecurringItem key={row.item.id} row={row} month={month} today={today}
               category={categories.find((c) => c.id === row.item.category_id)}
-              onEdit={() => setEditing({ open: true, item: row.item })} />
+              onEdit={isOwner ? () => setEditing({ open: true, item: row.item }) : undefined} />
           ))}
         </div>
       )}
 
-      <Button variant="secondary" className="w-full" onClick={() => setEditing({ open: true })}>
-        <Plus className="size-5" weight="bold" /> إضافة مصروف ثابت
-      </Button>
+      {isOwner ? (
+        <Button variant="secondary" className="w-full" onClick={() => setEditing({ open: true })}>
+          <Plus className="size-5" weight="bold" /> إضافة مصروف ثابت
+        </Button>
+      ) : (
+        <p className="text-center text-xs text-muted">إضافة المصاريف الثابتة وتعديلها لمنشئ العائلة، وتسجيل الدفع للجميع.</p>
+      )}
 
       <Sheet open={editing.open} onOpenChange={(o) => setEditing((s) => ({ ...s, open: o }))}
         title={editing.item ? 'تعديل المصروف الثابت' : 'مصروف ثابت جديد'}>
@@ -72,7 +78,7 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: str
 }
 
 function RecurringItem({ row, month, today, category, onEdit }: {
-  row: RecurringRow; month: string; today: string; category?: Category; onEdit: () => void;
+  row: RecurringRow; month: string; today: string; category?: Category; onEdit?: () => void;
 }) {
   const markPaid = useMarkPaid();
   const undo = useDeleteExpense();
@@ -82,7 +88,7 @@ function RecurringItem({ row, month, today, category, onEdit }: {
 
   return (
     <div className="flex items-center gap-3 rounded-card bg-surface p-3 shadow-[0_1px_2px_rgb(0_0_0/0.04)]">
-      <button type="button" onClick={onEdit} className="flex min-w-0 flex-1 items-center gap-3 text-start">
+      <button type="button" onClick={onEdit} disabled={!onEdit} className="flex min-w-0 flex-1 items-center gap-3 text-start">
         <CategoryIcon category={category} />
         <span className="min-w-0">
           <span className="block truncate font-medium">{item.name}</span>

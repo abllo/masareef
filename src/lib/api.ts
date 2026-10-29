@@ -11,6 +11,7 @@ function check<T>(res: { data: T; error: { message: string; code?: string } | nu
 }
 
 export function translateError(message: string, code?: string): string {
+  if (code === '42501' || /row-level security/i.test(message)) return 'هذا الإجراء لمنشئ العائلة فقط';
   if (code === '23505' && /categories_household_id_name_key/.test(message)) return 'يوجد تصنيف بنفس الاسم';
   if (code === '23505') return 'هذه العملية مسجلة مسبقاً';
   if (code === '23503') return 'لا يمكن الحذف لوجود عمليات مرتبطة. يمكنك أرشفته بدلاً من ذلك';
@@ -143,7 +144,9 @@ export async function saveExpense(
   const query = options.id
     ? supabase.from('expenses').update(input).eq('id', options.id)
     : supabase.from('expenses').insert({ ...input, household_id: householdId });
-  const saved = check(await query.select(EXPENSE_COLUMNS).single()) as Expense;
+  const res = await query.select(EXPENSE_COLUMNS).single();
+  if (res.error?.code === 'PGRST116') throw new Error('ما تقدر تعدّل عملية أضافها شخص آخر (لمنشئ العائلة فقط)');
+  const saved = check(res) as Expense;
 
   if (options.receipt) {
     const path = await uploadReceipt(householdId, saved.id, options.receipt);
@@ -157,7 +160,9 @@ export async function saveExpense(
 }
 
 export async function deleteExpense(expense: Pick<Expense, 'id' | 'receipt_path'>) {
-  check(await supabase.from('expenses').delete().eq('id', expense.id));
+  const { error, count } = await supabase.from('expenses').delete({ count: 'exact' }).eq('id', expense.id);
+  if (error) throw new Error(translateError(error.message, error.code));
+  if (count === 0) throw new Error('ما تقدر تحذف عملية أضافها شخص آخر (لمنشئ العائلة فقط)');
   if (expense.receipt_path) await supabase.storage.from('receipts').remove([expense.receipt_path]);
 }
 
@@ -219,7 +224,9 @@ export const fetchSmsLog = async (householdId: string, limit = 200) =>
   ) as SmsLogEntry[];
 
 export const deleteSmsLog = async (id: string) => {
-  check(await supabase.from('sms_log').delete().eq('id', id));
+  const { error, count } = await supabase.from('sms_log').delete({ count: 'exact' }).eq('id', id);
+  if (error) throw new Error(translateError(error.message, error.code));
+  if (count === 0) throw new Error('هذي رسالة شخص آخر، حذفها لمنشئ العائلة فقط');
 };
 
 export const fetchRules = async (householdId: string) =>

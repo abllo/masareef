@@ -13,6 +13,17 @@ export function useHousehold(): HouseholdContext {
   return v;
 }
 
+/** منشئ العائلة = صاحب صلاحيات الإدارة */
+export function useIsOwner() {
+  return useHousehold().me.role === 'owner';
+}
+
+/** صاحب العملية أو منشئ العائلة يقدر يعدّلها */
+export function useCanEdit() {
+  const { me } = useHousehold();
+  return (createdBy: string) => me.role === 'owner' || createdBy === me.user_id;
+}
+
 /** اسم العضو من معرّفه */
 export function useMemberName() {
   const { members } = useHousehold();
