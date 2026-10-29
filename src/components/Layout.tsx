@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
 import { NavLink } from 'react-router';
-import { AirplaneTilt, ChartBar, GearSix, House, ListBullets, Plus, Repeat, ShieldCheck, type Icon } from '@phosphor-icons/react';
+import { AirplaneTilt, ChartBar, ChartLineUp, GearSix, House, ListBullets, Plus, Repeat, ShieldCheck, type Icon } from '@phosphor-icons/react';
 import { useHousehold } from '../hooks/household';
 import { useRealtimeSync } from '../hooks/realtime';
 import { usePushRefresh } from '../hooks/push';
@@ -19,12 +19,13 @@ export const useExpenseSheet = () => useContext(SheetCtx);
 const NAV: { to: string; label: string; icon: Icon; end?: boolean }[] = [
   { to: '/', label: 'الرئيسية', icon: House, end: true },
   { to: '/expenses', label: 'العمليات', icon: ListBullets },
-  { to: '/recurring', label: 'الثابتة', icon: Repeat },
+  { to: '/readings', label: 'قراءات', icon: ChartLineUp },
   { to: '/settings', label: 'الإعدادات', icon: GearSix },
 ];
 
 /** روابط إضافية في الشريط الجانبي للكمبيوتر (في الجوال تُفتح من الرئيسية والعمليات) */
 const EXTRA_NAV: typeof NAV = [
+  { to: '/recurring', label: 'المصاريف الثابتة', icon: Repeat },
   { to: '/trips', label: 'الرحلات', icon: AirplaneTilt },
   { to: '/renewals', label: 'التجديدات والضمانات', icon: ShieldCheck },
   { to: '/years', label: 'المقارنة السنوية', icon: ChartBar },

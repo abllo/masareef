@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { AirplaneTilt, ChatCircleText, Paperclip, Repeat } from '@phosphor-icons/react';
+import { AirplaneTilt, ChatCircleText, FileText, Paperclip, Repeat } from '@phosphor-icons/react';
 import { flag } from '../lib/countries';
 import { useMemberName } from '../hooks/household';
 import { formatDayLabel } from '../lib/dates';
@@ -17,7 +17,7 @@ export function ExpenseRow({ expense, category }: { expense: Expense; category?:
       className="flex w-full items-center gap-3 rounded-2xl px-2 py-2.5 text-start transition hover:bg-surface-2 active:bg-surface-2">
       <CategoryIcon category={category} />
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-semibold">{expense.description?.replace(/^📩\s*/, '') || category?.name || 'مصروف'}</span>
+        <span className="block truncate font-semibold">{expense.description?.replace(/^[📩🧾]\s*/u, '') || category?.name || 'مصروف'}</span>
         <span className="flex items-center gap-1.5 text-xs text-muted">
           {expense.description && <span className="truncate">{category?.name}</span>}
           {expense.description && <span aria-hidden>•</span>}
@@ -25,6 +25,7 @@ export function ExpenseRow({ expense, category }: { expense: Expense; category?:
           {expense.recurring_id && <Repeat className="size-3.5" weight="bold" aria-label="مصروف ثابت" />}
           {expense.receipt_path && <Paperclip className="size-3.5" weight="bold" aria-label="فاتورة مرفقة" />}
           {expense.description?.startsWith('📩') && <ChatCircleText className="size-3.5" weight="bold" aria-label="من رسالة البنك" />}
+          {expense.description?.startsWith('🧾') && <FileText className="size-3.5" weight="bold" aria-label="من كشف الحساب" />}
           {expense.trip_id && <AirplaneTilt className="size-3.5 text-brand" weight="bold" aria-label="مصروف رحلة" />}
           {expense.sms_meta?.country && expense.sms_meta.country !== 'SA' && <span aria-hidden>{flag(expense.sms_meta.country)}</span>}
         </span>

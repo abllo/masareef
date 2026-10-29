@@ -108,7 +108,6 @@ function SettingsHome() {
         <Group title="الإدارة">
           <Row to="/settings/categories" icon={Tag} tone="#7C3AED" title="التصنيفات" value={`${activeCats}`} />
           <Row to="/settings/cards" icon={CreditCard} tone="#475569" title="البطاقات والبنوك" value={cards.length ? `${cards.length}` : undefined} />
-          <Row to="/recurring" icon={Repeat} tone="#B45309" title="المصاريف الثابتة" />
         </Group>
       )}
 
@@ -120,6 +119,7 @@ function SettingsHome() {
       </Group>
 
       <Group title="البيت">
+        <Row to="/recurring" icon={Repeat} tone="#B45309" title="المصاريف الثابتة" />
         <Row to="/renewals" icon={ShieldCheck} tone="#9333EA" title="التجديدات والضمانات" />
         <Row to="/trips" icon={AirplaneTilt} tone="#0284C7" title="الرحلات" />
         <Row to="/years" icon={ChartBar} tone="#0E6B58" title="المقارنة السنوية" />

@@ -124,7 +124,7 @@ export function filterExpenses(
 
 /** اسم المتجر للعرض: ما قرأه التطبيق من رسالة البنك، وإلا الوصف */
 export function merchantLabel(e: Pick<Expense, 'description' | 'sms_meta'>): string | null {
-  const m = e.sms_meta?.merchant?.trim() || e.description?.replace(/^📩\s*/, '').trim();
+  const m = e.sms_meta?.merchant?.trim() || e.description?.replace(/^[📩🧾]\s*/u, '').trim();
   return m || null;
 }
 

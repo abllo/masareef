@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { AirplaneTilt, Alarm, CaretLeft, ChartPieSlice, Receipt, ShieldCheck, Target, TrendDown, TrendUp } from '@phosphor-icons/react';
 import { CategoryDonut, MonthlyBars } from '../components/Charts';
-import { AiReportCard, InsightsCard } from '../components/Insights';
 import { ExpenseRow } from '../components/ExpenseList';
 import { PushPrompt } from '../components/Notifications';
 import { useExpenseSheet } from '../components/Layout';
@@ -213,8 +212,6 @@ export default function Dashboard() {
               ))}
             </Card>
           </div>
-          <AiReportCard month={month} />
-          <InsightsCard list={list} total={total} month={month} today={today} />
         </div>
       )}
     </div>
