@@ -28,6 +28,9 @@ export interface Category {
   color: string;
   sort_order: number;
   is_archived: boolean;
+  /** تصنيف أساسي مثبّت: لا يُحذف ولا يدمجه الذكاء الاصطناعي */
+  is_core?: boolean;
+  created_by_ai?: boolean;
 }
 
 export interface Expense {
@@ -43,6 +46,108 @@ export interface Expense {
   created_by: string;
   created_at: string;
   updated_at: string;
+  /** مفتاح موحّد لاسم المتجر (للعمليات القادمة من رسائل البنك) */
+  merchant_key: string | null;
+  sms_meta: SmsMeta | null;
+}
+
+export type PaymentMethod = 'mada' | 'credit_card' | 'apple_pay' | 'online' | 'bill_payment' | 'other';
+
+/** تفاصيل قرأها التطبيق من رسالة البنك */
+export interface SmsMeta {
+  source?: 'ai' | 'rules';
+  merchant?: string;
+  card_last4?: string;
+  /** شبكة البطاقة */
+  card_type?: 'mada' | 'visa' | 'mastercard' | 'amex' | 'other';
+  card_kind?: 'debit' | 'credit';
+  /** طريقة الدفع */
+  channel?: 'apple_pay' | 'pos' | 'online' | 'bill_payment' | 'other';
+  /** حقل قديم (قبل التفريق بين البطاقة وطريقة الدفع) */
+  payment_method?: PaymentMethod;
+  confidence?: number;
+  approx?: boolean;
+  rule?: boolean;
+  original_amount?: number;
+  original_currency?: string;
+  created_category?: string;
+}
+
+export interface SmsParseResult {
+  status: 'ok' | 'ignored';
+  reason?: string;
+  source?: 'ai' | 'rules';
+  amount?: Halalas;
+  merchant?: string;
+  merchant_key?: string;
+  category_id?: string;
+  category_name?: string;
+  date?: ISODate;
+  meta?: SmsMeta & { new_category?: string };
+  note?: string;
+  fallback_amount?: string;
+}
+
+export interface SmsLogEntry {
+  id: string;
+  household_id: string;
+  user_id: string | null;
+  received_at: string;
+  message: string | null;
+  status: 'recorded' | 'ignored' | 'duplicate' | 'linked';
+  reason: string | null;
+  source: 'ai' | 'rules' | null;
+  expense_id: string | null;
+  result: SmsParseResult | null;
+}
+
+export interface MerchantRule {
+  household_id: string;
+  merchant_key: string;
+  merchant_label: string;
+  category_id: string;
+  updated_at: string;
+}
+
+export interface AiStatus {
+  enabled: boolean;
+  model: string;
+  last_ok_at: string | null;
+  last_error_at: string | null;
+  last_error: string | null;
+  ai_messages_24h: number;
+}
+
+export type PlanOpKind = 'merge' | 'move_merchant' | 'create' | 'rename' | 'archive' | 'delete';
+export interface PlanOp {
+  op: PlanOpKind;
+  from?: string;
+  into?: string;
+  merchant?: string;
+  name?: string;
+  new_name?: string;
+  icon?: string;
+  reason?: string;
+  why?: string;
+}
+export interface CategoryPlan { summary: string; operations: PlanOp[] }
+export interface PlanResult { batch_id: string | null; applied: PlanOp[]; skipped: PlanOp[] }
+
+export interface MonthReport {
+  content: { headline: string; highlights: string[]; alerts: string[]; tips: string[] };
+  facts: Record<string, unknown>;
+  created_at: string;
+  cached: boolean;
+}
+
+export interface CategoryAudit {
+  id: string;
+  batch_id: string;
+  op: PlanOpKind;
+  details: Record<string, unknown>;
+  actor: 'ai' | 'user';
+  created_at: string;
+  undone_at: string | null;
 }
 
 export interface Recurring {

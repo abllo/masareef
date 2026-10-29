@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { CalendarDots, FilePdf, FileXls, FunnelSimple, MagnifyingGlass, Receipt, Tag, User, X } from '@phosphor-icons/react';
+import { Link } from 'react-router';
+import { CalendarDots, ChatCircleText, CreditCard, FilePdf, FileXls, FunnelSimple, MagnifyingGlass, Receipt, Tag, User, X } from '@phosphor-icons/react';
 import { ExpenseGroups } from '../components/ExpenseList';
 import { Button, EmptyState, IconButton, MonthSwitcher, Select, Spinner } from '../components/ui';
 import { useHousehold } from '../hooks/household';
@@ -8,7 +9,7 @@ import { useCategories, useExpenses } from '../hooks/queries';
 import { exportExcel, printReport } from '../lib/export';
 import { formatDayShort, formatMonth, monthEnd, monthOf, todayISO } from '../lib/dates';
 import { formatSAR, sumHalalas } from '../lib/money';
-import { filterExpenses } from '../lib/stats';
+import { cardLabel, filterExpenses } from '../lib/stats';
 import type { MonthKey } from '../lib/types';
 
 export default function Expenses() {
@@ -22,19 +23,23 @@ export default function Expenses() {
   const [query, setQuery] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [memberId, setMemberId] = useState('');
+  const [card, setCard] = useState('');
   const [exporting, setExporting] = useState(false);
 
   const from = custom ? range.from : month;
   const to = custom ? range.to : monthEnd(month);
   const { data = [], isPending } = useExpenses(from, to);
 
+  const cardOf = (e: (typeof data)[number]) => (e.sms_meta ? cardLabel(e.sms_meta) ?? 'بطاقة غير معروفة' : 'إدخال يدوي');
+  const cards = useMemo(() => [...new Set(data.map(cardOf))].sort(), [data]);
   const filtered = useMemo(
-    () => filterExpenses(data, { query, categoryId: categoryId || null, memberId: memberId || null }, categories),
-    [data, query, categoryId, memberId, categories],
+    () => filterExpenses(data, { query, categoryId: categoryId || null, memberId: memberId || null }, categories)
+      .filter((e) => !card || cardOf(e) === card),
+    [data, query, categoryId, memberId, categories, card],
   );
   const total = sumHalalas(filtered.map((e) => e.amount));
   const periodLabel = custom ? `${formatDayShort(from)} – ${formatDayShort(to)}` : formatMonth(month);
-  const hasFilters = Boolean(query || categoryId || memberId);
+  const hasFilters = Boolean(query || categoryId || memberId || card);
 
   const report = () => ({ title: `مصاريف ${household.name}`, periodLabel, expenses: filtered, categories, members });
 
@@ -62,6 +67,10 @@ export default function Expenses() {
       <header className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-bold">العمليات</h1>
         <div className="flex items-center gap-1">
+          <Link to="/messages" aria-label="سجل رسائل البنك" title="سجل رسائل البنك"
+            className="inline-flex size-10 items-center justify-center rounded-full bg-surface text-muted shadow-sm transition hover:text-ink">
+            <ChatCircleText className="size-5" />
+          </Link>
           {!custom && <MonthSwitcher month={month} onChange={setMonth} />}
           <IconButton label={custom ? 'العودة للعرض الشهري' : 'نطاق تاريخ مخصص'}
             onClick={() => { setCustom(!custom); setRange({ from: month, to: monthEnd(month) }); }}
@@ -95,6 +104,12 @@ export default function Expenses() {
           options={[{ value: '', label: 'كل التصنيفات' }, ...categories.map((c) => ({ value: c.id, label: c.name }))]} />
         <Select label="الشخص" icon={User} value={memberId} onChange={setMemberId}
           options={[{ value: '', label: 'الجميع' }, ...members.map((m) => ({ value: m.user_id, label: m.display_name }))]} />
+        {cards.length > 1 && (
+          <div className="col-span-2">
+            <Select label="البطاقة" icon={CreditCard} value={card} onChange={setCard}
+              options={[{ value: '', label: 'كل البطاقات' }, ...cards.map((c) => ({ value: c, label: c }))]} />
+          </div>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-card bg-surface px-5 py-4 shadow-[0_1px_2px_rgb(0_0_0/0.04)]">
@@ -105,7 +120,7 @@ export default function Expenses() {
         <div className="flex gap-2">
           {hasFilters && (
             <Button variant="ghost" className="h-10 px-3 text-sm"
-              onClick={() => { setQuery(''); setCategoryId(''); setMemberId(''); }}>
+              onClick={() => { setQuery(''); setCategoryId(''); setMemberId(''); setCard(''); }}>
               <X className="size-4" weight="bold" /> مسح
             </Button>
           )}

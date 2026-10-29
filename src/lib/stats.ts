@@ -1,6 +1,6 @@
 import { percentages, sumHalalas } from './money';
 import { addMonths, daysInMonth, monthEnd, monthOf } from './dates';
-import type { Category, Expense, Halalas, ISODate, MonthKey, MonthlyTotal } from './types';
+import type { Category, Expense, Halalas, ISODate, MonthKey, MonthlyTotal, SmsMeta } from './types';
 
 export interface CategorySlice {
   categoryId: string;
@@ -118,4 +118,84 @@ export function filterExpenses(
     }
     return true;
   });
+}
+
+// ---------- تحليلات ----------
+
+/** اسم المتجر للعرض: ما قرأه التطبيق من رسالة البنك، وإلا الوصف */
+export function merchantLabel(e: Pick<Expense, 'description' | 'sms_meta'>): string | null {
+  const m = e.sms_meta?.merchant?.trim() || e.description?.replace(/^📩\s*/, '').trim();
+  return m || null;
+}
+
+export interface MerchantTotal { label: string; total: Halalas; count: number }
+
+/** أكثر المتاجر صرفاً (يجمع نفس المتجر بغض النظر عن حالة الأحرف) */
+export function topMerchants(expenses: readonly Expense[], limit = 5): MerchantTotal[] {
+  const map = new Map<string, MerchantTotal>();
+  for (const e of expenses) {
+    const label = merchantLabel(e);
+    if (!label) continue;
+    const key = e.merchant_key ?? label.toLowerCase();
+    const cur = map.get(key) ?? { label, total: 0, count: 0 };
+    cur.total += e.amount;
+    cur.count += 1;
+    map.set(key, cur);
+  }
+  return [...map.values()].sort((a, b) => b.total - a.total).slice(0, limit);
+}
+
+export const CARD_TYPE_LABELS: Record<string, string> = {
+  mada: 'مدى', visa: 'فيزا', mastercard: 'ماستركارد', amex: 'أمريكان إكسبريس', other: 'بطاقة',
+};
+export const CHANNEL_LABELS: Record<string, string> = {
+  apple_pay: 'Apple Pay', pos: 'نقاط البيع', online: 'شراء إلكتروني', bill_payment: 'سداد', other: 'أخرى',
+};
+/** القيم القديمة قبل التفريق بين البطاقة وطريقة الدفع */
+export const PAYMENT_LABELS: Record<string, string> = {
+  mada: 'مدى', credit_card: 'بطاقة ائتمانية', apple_pay: 'Apple Pay', online: 'شراء إلكتروني',
+  bill_payment: 'سداد فواتير', other: 'أخرى',
+};
+
+/** وصف البطاقة: «مدى •4321» أو «فيزا ائتمانية •8812» */
+export function cardLabel(meta: SmsMeta | null | undefined): string | null {
+  if (!meta) return null;
+  const last4 = meta.card_last4 ? ` •${meta.card_last4}` : '';
+  if (meta.card_type) {
+    const credit = meta.card_kind === 'credit' && meta.card_type !== 'mada' ? ' ائتمانية' : '';
+    return `${CARD_TYPE_LABELS[meta.card_type] ?? 'بطاقة'}${credit}${last4}`;
+  }
+  if (meta.payment_method === 'mada') return `مدى${last4}`;
+  if (meta.payment_method === 'credit_card') return `بطاقة ائتمانية${last4}`;
+  return last4 ? `بطاقة${last4}` : null;
+}
+
+export function channelLabel(meta: SmsMeta | null | undefined): string | null {
+  if (!meta) return null;
+  if (meta.channel) return CHANNEL_LABELS[meta.channel] ?? null;
+  if (meta.payment_method && ['apple_pay', 'online', 'bill_payment'].includes(meta.payment_method)) return PAYMENT_LABELS[meta.payment_method]!;
+  return null;
+}
+
+export interface MethodTotal { key: string; label: string; total: Halalas; count: number }
+
+/** الصرف حسب البطاقة (مدى / فيزا / …) — كلها مصروفات، لكن كل بطاقة مميزة */
+export function byPaymentMethod(expenses: readonly Expense[]): MethodTotal[] {
+  const map = new Map<string, MethodTotal>();
+  for (const e of expenses) {
+    const label = e.sms_meta ? (cardLabel(e.sms_meta) ?? 'بطاقة غير معروفة') : 'إدخال يدوي';
+    const cur = map.get(label) ?? { key: label, label, total: 0, count: 0 };
+    cur.total += e.amount;
+    cur.count += 1;
+    map.set(label, cur);
+  }
+  return [...map.values()].sort((a, b) => b.total - a.total);
+}
+
+/** توقع مصروف الشهر الحالي بمعدل الصرف اليومي حتى اليوم؛ null لغير الشهر الحالي أو أول يومين */
+export function monthProjection(spent: Halalas, month: MonthKey, today: ISODate): Halalas | null {
+  if (monthOf(today) !== month) return null;
+  const day = Number(today.slice(8, 10));
+  if (day < 3) return null;
+  return Math.round((spent / day) * daysInMonth(month));
 }

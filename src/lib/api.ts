@@ -1,5 +1,8 @@
 import { supabase } from './supabase';
-import type { Category, Expense, Household, ISODate, Member, MonthKey, MonthlyTotal, Recurring } from './types';
+import type {
+  AiStatus, Category, CategoryAudit, CategoryPlan, Expense, Household, ISODate, Member, MerchantRule, MonthKey, MonthlyTotal, MonthReport,
+  PlanOp, PlanResult, Recurring, SmsLogEntry, SmsParseResult,
+} from './types';
 
 /** يرمي خطأ مقروءاً بالعربية عند فشل الطلب */
 function check<T>(res: { data: T; error: { message: string; code?: string } | null }): T {
@@ -18,6 +21,11 @@ export function translateError(message: string, code?: string): string {
   if (/owner cannot leave/i.test(message)) return 'منشئ العائلة لا يمكنه المغادرة';
   if (/member not found/i.test(message)) return 'العضو غير موجود';
   if (/not in a household/i.test(message)) return 'حسابك غير مرتبط بعائلة';
+  if (/ai not enabled/i.test(message)) return 'الذكاء الاصطناعي غير مفعّل بعد: أضف مفتاح Claude في Supabase';
+  if (/ai unavailable/i.test(message)) return 'تعذّر الوصول لـ Claude الآن، جرّب بعد قليل';
+  if (/core category/i.test(message)) return 'هذا تصنيف أساسي مثبّت، لا يمكن حذفه (تقدر تغيّر اسمه أو لونه)';
+  if (/no expenses/i.test(message)) return 'ما فيه عمليات في هذا الشهر للتحليل';
+  if (/statement timeout|canceling statement/i.test(message)) return 'أخذ وقتاً أطول من المتوقع، جرّب مرة ثانية';
   if (/same_password|different from the old/i.test(message)) return 'كلمة المرور الجديدة مطابقة للقديمة';
   if (/rate limit|too many/i.test(message)) return 'محاولات كثيرة، انتظر قليلاً ثم أعد المحاولة';
   if (/not authorized|Email address .* (is )?invalid|sending .*email/i.test(message))
@@ -97,7 +105,7 @@ export const deleteCategory = async (id: string) => check(await supabase.from('c
 
 // ---------- المصروفات ----------
 const EXPENSE_COLUMNS =
-  'id,household_id,category_id,amount,expense_date,description,receipt_path,recurring_id,recurring_period,created_by,created_at,updated_at';
+  'id,household_id,category_id,amount,expense_date,description,receipt_path,recurring_id,recurring_period,created_by,created_at,updated_at,merchant_key,sms_meta';
 
 export const fetchExpenses = async (householdId: string, from: ISODate, to: ISODate) =>
   check(
@@ -196,3 +204,60 @@ export const deleteRecurring = async (id: string) =>
 
 export const markRecurringPaid = async (recurringId: string, period: MonthKey, date: ISODate) =>
   check(await supabase.rpc('mark_recurring_paid', { p_recurring_id: recurringId, p_period: period, p_date: date })) as string;
+
+// ---------- الذكاء الاصطناعي ورسائل البنك ----------
+export const fetchAiStatus = async () => check(await supabase.rpc('ai_status')) as AiStatus;
+
+export const previewSms = async (message: string) =>
+  check(await supabase.rpc('sms_preview', { p_message: message })) as SmsParseResult;
+
+export const fetchSmsLog = async (householdId: string, limit = 200) =>
+  check(
+    await supabase.from('sms_log').select('*').eq('household_id', householdId)
+      .order('received_at', { ascending: false }).limit(limit),
+  ) as SmsLogEntry[];
+
+export const deleteSmsLog = async (id: string) => {
+  check(await supabase.from('sms_log').delete().eq('id', id));
+};
+
+export const fetchRules = async (householdId: string) =>
+  check(
+    await supabase.from('merchant_rules').select('*').eq('household_id', householdId).order('merchant_label'),
+  ) as MerchantRule[];
+
+export const deleteRule = async (householdId: string, merchantKey: string) => {
+  check(await supabase.from('merchant_rules').delete().eq('household_id', householdId).eq('merchant_key', merchantKey));
+};
+
+export const fetchRule = async (householdId: string, merchantKey: string) =>
+  check(
+    await supabase.from('merchant_rules').select('*').eq('household_id', householdId).eq('merchant_key', merchantKey).maybeSingle(),
+  ) as MerchantRule | null;
+
+export const requestCategoryPlan = async () => check(await supabase.rpc('ai_category_plan')) as CategoryPlan;
+
+export const applyCategoryPlan = async (operations: PlanOp[], actor: 'ai' | 'user' = 'ai') =>
+  check(await supabase.rpc('apply_category_plan', { p_operations: operations, p_actor: actor })) as PlanResult;
+
+export const undoCategoryBatch = async (batchId: string) =>
+  check(await supabase.rpc('undo_category_batch', { p_batch: batchId })) as number;
+
+export const fetchCategoryAudit = async (householdId: string) =>
+  check(
+    await supabase.from('category_audit').select('id,batch_id,op,details,actor,created_at,undone_at')
+      .eq('household_id', householdId).order('created_at', { ascending: false }).limit(100),
+  ) as CategoryAudit[];
+
+export const fetchExpense = async (id: string) =>
+  check(await supabase.from('expenses').select(EXPENSE_COLUMNS).eq('id', id).maybeSingle()) as Expense | null;
+
+export const fetchMonthReport = async (month: MonthKey, refresh = false) =>
+  check(await supabase.rpc('ai_month_report', { p_month: month, p_refresh: refresh })) as MonthReport;
+
+export async function fetchCachedReport(householdId: string, month: MonthKey): Promise<MonthReport | null> {
+  const row = check(
+    await supabase.from('ai_reports').select('content,facts,created_at').eq('household_id', householdId).eq('month', month).maybeSingle(),
+  ) as { content: MonthReport['content']; facts: MonthReport['facts']; created_at: string } | null;
+  return row ? { ...row, cached: true } : null;
+}

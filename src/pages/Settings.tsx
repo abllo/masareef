@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import {
   ArrowsClockwise, ChatCircleText, Copy, Key, SignOut, Plus, Tag, Target, UserMinus, UsersThree,
 } from '@phosphor-icons/react';
+import { AiPanel } from '../components/AiPanel';
 import { Button, Card, CategoryIcon, ConfirmButton, Field, IconButton, Sheet, cx } from '../components/ui';
 import { useHousehold } from '../hooks/household';
 import { useCategories, useDeleteCategory, useInvalidate, useSaveCategory, useUpdateHousehold } from '../hooks/queries';
@@ -21,6 +22,7 @@ export default function Settings() {
       <BudgetSection />
       <FamilySection />
       <SmsSection />
+      <AiPanel />
       <CategoriesSection />
       <PasswordSection />
       <Button variant="ghost" className="w-full text-danger" onClick={() => supabase.auth.signOut()}>
@@ -312,6 +314,8 @@ function CategoriesSection() {
               className={cx('flex w-full items-center gap-3 rounded-2xl px-2 py-2 text-start hover:bg-surface-2', c.is_archived && 'opacity-50')}>
               <CategoryIcon category={c} size="sm" />
               <span className="flex-1 font-medium">{c.name}</span>
+              {c.is_core && <span className="text-xs text-muted">أساسي</span>}
+              {c.created_by_ai && !c.is_core && <span className="text-xs text-brand">أنشأه Claude</span>}
               {c.is_archived && <span className="text-xs text-muted">مؤرشف</span>}
             </button>
           </li>
@@ -372,7 +376,12 @@ function CategoryForm({ item, nextOrder, onDone }: { item?: Category; nextOrder:
           ))}
         </div>
       </fieldset>
-      {item && (
+      {item?.is_core && (
+        <p className="rounded-2xl bg-surface-2 px-4 py-3 text-xs text-muted">
+          تصنيف أساسي مثبّت: تقدر تغيّر اسمه وأيقونته ولونه، لكن ما ينحذف ولا يدمجه الذكاء الاصطناعي.
+        </p>
+      )}
+      {item && !item.is_core && (
         <label className="flex items-center justify-between rounded-2xl bg-surface-2 px-4 py-3">
           <span>
             <span className="block font-medium">أرشفة</span>
@@ -383,7 +392,7 @@ function CategoryForm({ item, nextOrder, onDone }: { item?: Category; nextOrder:
       )}
       <div className="flex gap-2">
         <Button type="submit" loading={save.isPending} className="flex-1">{item ? 'حفظ التعديل' : 'إضافة'}</Button>
-        {item && (
+        {item && !item.is_core && (
           <ConfirmButton loading={remove.isPending} confirmText="تأكيد الحذف"
             onConfirm={() => remove.mutate(item.id, { onSuccess: onDone })}>حذف</ConfirmButton>
         )}

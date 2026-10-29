@@ -12,6 +12,10 @@ export const keys = {
   monthly: (h: string, from: string) => ['monthly', h, from] as const,
   recurring: (h: string) => ['recurring', h] as const,
   recurringPayments: (h: string, m: string) => ['recurring-payments', h, m] as const,
+  smsLog: (h: string) => ['sms-log', h] as const,
+  rules: (h: string) => ['rules', h] as const,
+  aiStatus: (h: string) => ['ai-status', h] as const,
+  audit: (h: string) => ['category-audit', h] as const,
 };
 
 /** كل ما يتأثر بتغيير في المصروفات */
@@ -56,6 +60,29 @@ export function useRecurring() {
   return useQuery({ queryKey: keys.recurring(household.id), queryFn: () => api.fetchRecurring(household.id) });
 }
 
+export function useSmsLog() {
+  const { household } = useHousehold();
+  return useQuery({ queryKey: keys.smsLog(household.id), queryFn: () => api.fetchSmsLog(household.id) });
+}
+
+export function useRules() {
+  const { household } = useHousehold();
+  return useQuery({ queryKey: keys.rules(household.id), queryFn: () => api.fetchRules(household.id) });
+}
+
+export function useAiStatus() {
+  const { household } = useHousehold();
+  return useQuery({ queryKey: keys.aiStatus(household.id), queryFn: api.fetchAiStatus, staleTime: 60_000 });
+}
+
+export function useCategoryAudit() {
+  const { household } = useHousehold();
+  return useQuery({ queryKey: keys.audit(household.id), queryFn: () => api.fetchCategoryAudit(household.id) });
+}
+
+/** كل ما يتأثر بتنظيم التصنيفات */
+export const CATEGORY_DEPENDENT = ['categories', 'rules', 'category-audit', 'recurring', ...EXPENSE_DEPENDENT];
+
 export function useRecurringPayments(month: MonthKey) {
   const { household } = useHousehold();
   return useQuery({
@@ -71,7 +98,7 @@ export function useSaveExpense() {
   return useMutation({
     mutationFn: (v: { input: api.ExpenseInput; id?: string; receipt?: File | null }) =>
       api.saveExpense(household.id, v.input, { id: v.id, receipt: v.receipt }),
-    onSettled: () => invalidate(...EXPENSE_DEPENDENT),
+    onSettled: () => invalidate(...EXPENSE_DEPENDENT, 'rules'),
     onError,
   });
 }

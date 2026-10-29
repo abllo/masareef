@@ -1,25 +1,53 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
-import { ArrowSquareOut, Camera, CheckCircle, Receipt as ReceiptIcon, Trash } from '@phosphor-icons/react';
+import { ArrowSquareOut, Camera, ChatCircleText, CheckCircle, Receipt as ReceiptIcon, Sparkle, Trash } from '@phosphor-icons/react';
 import { useCategories, useDeleteExpense, useSaveExpense } from '../hooks/queries';
 import { useMemberName } from '../hooks/household';
 import { receiptUrl } from '../lib/api';
 import { addDays, formatDayLabel, todayISO } from '../lib/dates';
 import { formatSAR, parseAmount, toInputValue } from '../lib/money';
+import { cardLabel, channelLabel } from '../lib/stats';
 import type { Expense } from '../lib/types';
+import type { ExpenseDraft } from './Layout';
 import { Button, CategoryIcon, ConfirmButton, Sheet, cx } from './ui';
 
-export function ExpenseSheet({ open, onOpenChange, expense }: {
-  open: boolean; onOpenChange: (o: boolean) => void; expense?: Expense;
+export function ExpenseSheet({ open, onOpenChange, expense, draft }: {
+  open: boolean; onOpenChange: (o: boolean) => void; expense?: Expense; draft?: ExpenseDraft;
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange} title={expense ? 'تعديل المصروف' : 'مصروف جديد'}>
-      <ExpenseForm key={expense?.id ?? 'new'} expense={expense} onDone={() => onOpenChange(false)} />
+      <ExpenseForm key={expense?.id ?? `new-${draft?.description ?? ''}-${draft?.amount ?? ''}`} expense={expense} draft={draft}
+        onDone={() => onOpenChange(false)} />
     </Sheet>
   );
 }
 
-function ExpenseForm({ expense, onDone }: { expense?: Expense; onDone: () => void }) {
+/** تفاصيل ما قرأه التطبيق من رسالة البنك */
+function SmsDetails({ expense }: { expense: Expense }) {
+  const meta = expense.sms_meta;
+  if (!meta) return null;
+  const parts = [
+    cardLabel(meta),
+    channelLabel(meta),
+    meta.original_amount && meta.original_currency && meta.original_currency !== 'SAR'
+      && `${meta.original_amount} ${meta.original_currency}${meta.approx ? ' (المبلغ بالريال تقريبي)' : ''}`,
+  ].filter(Boolean);
+  return (
+    <div className="flex items-start gap-2 rounded-2xl bg-surface-2 px-3 py-2.5 text-xs leading-relaxed text-muted">
+      <ChatCircleText className="mt-0.5 size-4 shrink-0" weight="duotone" />
+      <span className="flex-1">
+        من رسالة البنك{parts.length > 0 && ` · ${parts.join(' · ')}`}
+        <span className="mt-0.5 flex items-center gap-1">
+          {meta.rule ? 'التصنيف من قاعدة تعلّمها التطبيق منكم'
+            : meta.source === 'ai' ? <><Sparkle className="size-3.5" weight="fill" /> قرأها وصنّفها Claude</>
+            : 'قراءة محلية (بدون ذكاء اصطناعي)'}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: ExpenseDraft; onDone: () => void }) {
   const today = todayISO();
   const { data: categories = [] } = useCategories();
   const save = useSaveExpense();
@@ -27,10 +55,11 @@ function ExpenseForm({ expense, onDone }: { expense?: Expense; onDone: () => voi
   const memberName = useMemberName();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [amountText, setAmountText] = useState(expense ? toInputValue(expense.amount) : '');
-  const [categoryId, setCategoryId] = useState(expense?.category_id ?? '');
-  const [date, setDate] = useState(expense?.expense_date ?? today);
-  const [description, setDescription] = useState(expense?.description ?? '');
+  const [amountText, setAmountText] = useState(
+    expense ? toInputValue(expense.amount) : draft?.amount ? toInputValue(draft.amount) : '');
+  const [categoryId, setCategoryId] = useState(expense?.category_id ?? draft?.categoryId ?? '');
+  const [date, setDate] = useState(expense?.expense_date ?? draft?.date ?? today);
+  const [description, setDescription] = useState(expense?.description ?? draft?.description ?? '');
   const [receipt, setReceipt] = useState<File | null>(null);
   const [touched, setTouched] = useState(false);
 
@@ -53,6 +82,15 @@ function ExpenseForm({ expense, onDone }: { expense?: Expense; onDone: () => voi
     }).catch(() => null);
     if (!saved) return;
     toast.success(expense ? 'تم حفظ التعديل' : `تمت إضافة ${formatSAR(amount)}`);
+    // تغيير تصنيف عملية من رسالة بنك = قاعدة يتعلّمها التطبيق لهذا المتجر
+    if (expense?.merchant_key && !expense.recurring_id && expense.category_id !== categoryId) {
+      const merchant = expense.sms_meta?.merchant ?? expense.description?.replace(/^📩\s*/, '') ?? '';
+      const cat = categories.find((c) => c.id === categoryId)?.name ?? '';
+      toast(`تعلّمت: عمليات «${merchant}» القادمة تروح لـ «${cat}»`, {
+        description: 'تقدر تعدّل القواعد من الإعدادات ← الذكاء الاصطناعي',
+        icon: <Sparkle className="size-4" weight="fill" />,
+      });
+    }
     onDone();
   }
 
@@ -144,6 +182,8 @@ function ExpenseForm({ expense, onDone }: { expense?: Expense; onDone: () => voi
         <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden"
           onChange={(e) => setReceipt(e.target.files?.[0] ?? null)} />
       </div>
+
+      {expense?.sms_meta && <SmsDetails expense={expense} />}
 
       {expense && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted">

@@ -8,7 +8,10 @@ import { cx } from './ui';
 import { ExpenseSheet } from './ExpenseSheet';
 import { Logo } from './Logo';
 
-const SheetCtx = createContext<(expense?: Expense) => void>(() => {});
+/** قيم مبدئية لمصروف جديد (مثلاً من رسالة بنك تجاهلها التطبيق) */
+export interface ExpenseDraft { amount?: number; description?: string; date?: string; categoryId?: string }
+
+const SheetCtx = createContext<(expense?: Expense, draft?: ExpenseDraft) => void>(() => {});
 /** يفتح نافذة إضافة مصروف جديد، أو تعديل مصروف موجود */
 export const useExpenseSheet = () => useContext(SheetCtx);
 
@@ -23,8 +26,8 @@ export function Layout({ children }: { children: ReactNode }) {
   const { household } = useHousehold();
   useRealtimeSync(household.id);
 
-  const [state, setState] = useState<{ open: boolean; expense?: Expense }>({ open: false });
-  const open = useCallback((expense?: Expense) => setState({ open: true, expense }), []);
+  const [state, setState] = useState<{ open: boolean; expense?: Expense; draft?: ExpenseDraft }>({ open: false });
+  const open = useCallback((expense?: Expense, draft?: ExpenseDraft) => setState({ open: true, expense, draft }), []);
 
   return (
     <SheetCtx.Provider value={open}>
@@ -73,6 +76,7 @@ export function Layout({ children }: { children: ReactNode }) {
       <ExpenseSheet
         open={state.open}
         expense={state.expense}
+        draft={state.draft}
         onOpenChange={(o) => setState((s) => ({ ...s, open: o }))}
       />
     </SheetCtx.Provider>

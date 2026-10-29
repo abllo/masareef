@@ -16,6 +16,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Expenses = lazy(() => import('./pages/Expenses'));
 const RecurringPage = lazy(() => import('./pages/Recurring'));
 const Settings = lazy(() => import('./pages/Settings'));
+const Messages = lazy(() => import('./pages/Messages'));
 
 export default function App() {
   const { session, loading, recovery, endRecovery } = useAuth();
@@ -51,6 +52,7 @@ export default function App() {
             <Route path="expenses" element={<Expenses />} />
             <Route path="recurring" element={<RecurringPage />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="messages" element={<Messages />} />
             <Route path="*" element={<Dashboard />} />
           </Routes>
         </Suspense>

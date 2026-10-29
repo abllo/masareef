@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { budgetStatus, byCategory, changeRatio, comparisonRange, filterExpenses, groupByDay, monthlySeries } from './stats';
+import { budgetStatus, byCategory, byPaymentMethod, changeRatio, comparisonRange, filterExpenses, groupByDay, monthProjection, monthlySeries, topMerchants } from './stats';
 import { recurringForMonth } from './recurring';
 import type { Category, Expense, Recurring } from './types';
 
@@ -8,7 +8,8 @@ const cat = (id: string, name: string): Category => ({
 });
 const exp = (id: string, category_id: string, amount: number, expense_date: string, extra: Partial<Expense> = {}): Expense => ({
   id, household_id: 'h', category_id, amount, expense_date, description: null, receipt_path: null,
-  recurring_id: null, recurring_period: null, created_by: 'u1', created_at: '', updated_at: '', ...extra,
+  recurring_id: null, recurring_period: null, created_by: 'u1', created_at: '', updated_at: '',
+  merchant_key: null, sms_meta: null, ...extra,
 });
 
 const cats = [cat('a', 'بقالة'), cat('b', 'مطاعم')];
@@ -97,5 +98,34 @@ describe('comparisonRange', () => {
   });
   it('handles January', () => {
     expect(comparisonRange('2027-01-01', '2027-01-10')).toEqual({ from: '2026-12-01', to: '2026-12-10', partial: true });
+  });
+});
+
+describe('insights', () => {
+  const sms = (merchant: string, card: string, type: 'mada' | 'visa', kind: 'debit' | 'credit') =>
+    ({ merchant_key: merchant.toLowerCase(), sms_meta: { merchant, card_last4: card, card_type: type, card_kind: kind, source: 'ai' as const } });
+  const list = [
+    exp('1', 'c1', 4500, '2026-10-01', { description: '📩 Starbucks', ...sms('Starbucks', '8812', 'visa', 'credit') }),
+    exp('2', 'c1', 2500, '2026-10-02', { description: '📩 STARBUCKS', ...sms('Starbucks', '4321', 'mada', 'debit') }),
+    exp('3', 'c2', 30000, '2026-10-03', { description: '📩 بنده', ...sms('بنده', '4321', 'mada', 'debit') }),
+    exp('4', 'c2', 1000, '2026-10-03', { description: 'خبز' }),
+    exp('5', 'c2', 500, '2026-10-03'),
+  ];
+  it('ranks merchants by total and groups the same merchant', () => {
+    expect(topMerchants(list)).toEqual([
+      { label: 'بنده', total: 30000, count: 1 },
+      { label: 'Starbucks', total: 7000, count: 2 },
+      { label: 'خبز', total: 1000, count: 1 },
+    ]);
+  });
+  it('splits spending by payment method and card', () => {
+    expect(byPaymentMethod(list).map((m) => [m.label, m.total])).toEqual([
+      ['مدى •4321', 32500], ['فيزا ائتمانية •8812', 4500], ['إدخال يدوي', 1500],
+    ]);
+  });
+  it('projects the month from the daily average', () => {
+    expect(monthProjection(10000, '2026-10-01', '2026-10-10')).toBe(31000);
+    expect(monthProjection(10000, '2026-10-01', '2026-10-02')).toBeNull();
+    expect(monthProjection(10000, '2026-09-01', '2026-10-10')).toBeNull();
   });
 });
