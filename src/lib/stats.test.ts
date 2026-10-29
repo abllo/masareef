@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { budgetStatus, byCategory, byPaymentMethod, changeRatio, comparisonRange, filterExpenses, groupByDay, monthProjection, monthlySeries, topMerchants } from './stats';
+import { budgetStatus, byBank, byCategory, byPaymentMethod, changeRatio, comparisonRange, filterExpenses, groupByDay, monthProjection, monthlySeries, topMerchants } from './stats';
 import { recurringForMonth } from './recurring';
 import type { Category, Expense, Recurring } from './types';
 
@@ -122,6 +122,12 @@ describe('insights', () => {
     expect(byPaymentMethod(list).map((m) => [m.label, m.total])).toEqual([
       ['مدى •4321', 32500], ['فيزا ائتمانية •8812', 4500], ['إدخال يدوي', 1500],
     ]);
+  });
+  it('uses the bank and nickname of known cards', () => {
+    const cards = new Map([['4321', { household_id: 'h', card_last4: '4321', bank: 'alinma', card_type: 'mada', card_kind: 'debit', nickname: null, fx_fee_pct: null, first_seen: '', last_seen: '' }],
+                           ['8812', { household_id: 'h', card_last4: '8812', bank: 'alrajhi', card_type: 'visa', card_kind: 'credit', nickname: 'فيزا السفر', fx_fee_pct: 2.5, first_seen: '', last_seen: '' }]]);
+    expect(byPaymentMethod(list, cards).map((m) => m.label)).toEqual(['الإنماء · مدى •4321', 'فيزا السفر •8812', 'إدخال يدوي']);
+    expect(byBank(list, cards).map((m) => [m.label, m.total])).toEqual([['الإنماء', 32500], ['الراجحي', 4500], ['إدخال يدوي', 1500]]);
   });
   it('projects the month from the daily average', () => {
     expect(monthProjection(10000, '2026-10-01', '2026-10-10')).toBe(31000);

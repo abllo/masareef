@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import type {
-  AiStatus, Category, CategoryAudit, CategoryPlan, Expense, Household, ISODate, Member, MerchantRule, MonthKey, MonthlyTotal, MonthReport,
+  AiStatus, Card, Category, CategoryAudit, CategoryPlan, Expense, Household, ISODate, Member, MerchantRule, MonthKey, MonthlyTotal, MonthReport,
   PlanOp, PlanResult, Recurring, SmsLogEntry, SmsParseResult,
 } from './types';
 
@@ -77,7 +77,7 @@ export const leaveHousehold = async () => {
 export const fetchSmsToken = async () => check(await supabase.rpc('my_sms_token')) as string;
 export const regenerateSmsToken = async () => check(await supabase.rpc('regenerate_sms_token')) as string;
 
-export async function updateHousehold(id: string, patch: Partial<Pick<Household, 'name' | 'monthly_budget'>>) {
+export async function updateHousehold(id: string, patch: Partial<Pick<Household, 'name' | 'monthly_budget' | 'fx_fee_pct'>>) {
   check(await supabase.from('households').update(patch).eq('id', id));
 }
 
@@ -261,3 +261,15 @@ export async function fetchCachedReport(householdId: string, month: MonthKey): P
   ) as { content: MonthReport['content']; facts: MonthReport['facts']; created_at: string } | null;
   return row ? { ...row, cached: true } : null;
 }
+
+// ---------- البطاقات ----------
+export const fetchCards = async (householdId: string) =>
+  check(await supabase.from('cards').select('*').eq('household_id', householdId).order('last_seen', { ascending: false })) as Card[];
+
+export async function saveCard(householdId: string, last4: string, patch: Partial<Pick<Card, 'bank' | 'nickname' | 'fx_fee_pct'>>) {
+  check(await supabase.from('cards').update(patch).eq('household_id', householdId).eq('card_last4', last4));
+}
+
+export const deleteCard = async (householdId: string, last4: string) => {
+  check(await supabase.from('cards').delete().eq('household_id', householdId).eq('card_last4', last4));
+};

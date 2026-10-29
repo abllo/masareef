@@ -1,12 +1,12 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
 import { ArrowSquareOut, Camera, ChatCircleText, CheckCircle, Receipt as ReceiptIcon, Sparkle, Trash } from '@phosphor-icons/react';
-import { useCategories, useDeleteExpense, useSaveExpense } from '../hooks/queries';
+import { useCards, useCategories, useDeleteExpense, useSaveExpense } from '../hooks/queries';
 import { useMemberName } from '../hooks/household';
 import { receiptUrl } from '../lib/api';
 import { addDays, formatDayLabel, todayISO } from '../lib/dates';
 import { formatSAR, parseAmount, toInputValue } from '../lib/money';
-import { cardLabel, channelLabel } from '../lib/stats';
+import { cardLabel, channelLabel, fxLabel } from '../lib/stats';
 import type { Expense } from '../lib/types';
 import type { ExpenseDraft } from './Layout';
 import { Button, CategoryIcon, ConfirmButton, Sheet, cx } from './ui';
@@ -24,13 +24,16 @@ export function ExpenseSheet({ open, onOpenChange, expense, draft }: {
 
 /** تفاصيل ما قرأه التطبيق من رسالة البنك */
 function SmsDetails({ expense }: { expense: Expense }) {
+  const { data: cards = [] } = useCards();
   const meta = expense.sms_meta;
   if (!meta) return null;
+  const cardMap = new Map(cards.map((c) => [c.card_last4, c]));
+  const fx = fxLabel(meta);
   const parts = [
-    cardLabel(meta),
+    cardLabel(meta, cardMap),
     channelLabel(meta),
-    meta.original_amount && meta.original_currency && meta.original_currency !== 'SAR'
-      && `${meta.original_amount} ${meta.original_currency}${meta.approx ? ' (المبلغ بالريال تقريبي)' : ''}`,
+    fx && `${fx}${meta.approx ? ' ≈' : ''}`,
+    meta.fees_sar && `شامل رسوم ${meta.fees_sar} ر.س`,
   ].filter(Boolean);
   return (
     <div className="flex items-start gap-2 rounded-2xl bg-surface-2 px-3 py-2.5 text-xs leading-relaxed text-muted">

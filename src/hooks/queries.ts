@@ -16,6 +16,7 @@ export const keys = {
   rules: (h: string) => ['rules', h] as const,
   aiStatus: (h: string) => ['ai-status', h] as const,
   audit: (h: string) => ['category-audit', h] as const,
+  cards: (h: string) => ['cards', h] as const,
 };
 
 /** كل ما يتأثر بتغيير في المصروفات */
@@ -73,6 +74,11 @@ export function useRules() {
 export function useAiStatus() {
   const { household } = useHousehold();
   return useQuery({ queryKey: keys.aiStatus(household.id), queryFn: api.fetchAiStatus, staleTime: 60_000 });
+}
+
+export function useCards() {
+  const { household } = useHousehold();
+  return useQuery({ queryKey: keys.cards(household.id), queryFn: () => api.fetchCards(household.id) });
 }
 
 export function useCategoryAudit() {
@@ -169,7 +175,7 @@ export function useUpdateHousehold() {
   const { household, me } = useHousehold();
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: async (v: { name?: string; monthly_budget?: number | null; display_name?: string }) => {
+    mutationFn: async (v: { name?: string; monthly_budget?: number | null; fx_fee_pct?: number; display_name?: string }) => {
       const { display_name, ...patch } = v;
       if (Object.keys(patch).length) await api.updateHousehold(household.id, patch);
       if (display_name) await api.updateDisplayName(household.id, me.user_id, display_name);

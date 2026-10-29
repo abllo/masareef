@@ -2,13 +2,13 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowsClockwise, CaretLeft, ChartLineUp, ChatCircleText, CreditCard, Lightbulb, Sparkle, Storefront, Warning } from '@phosphor-icons/react';
+import { ArrowsClockwise, Bank, CaretLeft, ChartLineUp, ChatCircleText, CreditCard, Lightbulb, Sparkle, Storefront, Warning } from '@phosphor-icons/react';
 import { useHousehold } from '../hooks/household';
-import { useAiStatus } from '../hooks/queries';
+import { useAiStatus, useCards } from '../hooks/queries';
 import { fetchCachedReport, fetchMonthReport } from '../lib/api';
 import { formatMonth } from '../lib/dates';
 import { formatSAR } from '../lib/money';
-import { byPaymentMethod, monthProjection, topMerchants } from '../lib/stats';
+import { byBank, byPaymentMethod, monthProjection, topMerchants } from '../lib/stats';
 import type { Expense, Halalas, ISODate, MonthKey } from '../lib/types';
 import { Button, Card, cx } from './ui';
 
@@ -35,8 +35,11 @@ function Bars({ rows, total }: { rows: { label: string; total: Halalas; count: n
 
 /** تحليلات محسوبة محلياً من عمليات الشهر (دقيقة 100% لأنها من بياناتكم مباشرة) */
 export function InsightsCard({ list, total, month, today }: { list: Expense[]; total: Halalas; month: MonthKey; today: ISODate }) {
+  const { data: cardRows = [] } = useCards();
+  const cardMap = new Map(cardRows.map((c) => [c.card_last4, c]));
   const merchants = topMerchants(list, 5);
-  const cards = byPaymentMethod(list);
+  const cards = byPaymentMethod(list, cardMap);
+  const banks = byBank(list, cardMap);
   const projection = monthProjection(total, month, today);
   const { household } = useHousehold();
 
@@ -60,6 +63,12 @@ export function InsightsCard({ list, total, month, today }: { list: Expense[]; t
         <section>
           <h3 className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold text-muted"><Storefront className="size-4" weight="bold" />أكثر المتاجر صرفاً</h3>
           <Bars rows={merchants} total={total} />
+        </section>
+      )}
+      {banks.length > 1 && (
+        <section>
+          <h3 className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold text-muted"><Bank className="size-4" weight="bold" />حسب البنك</h3>
+          <Bars rows={banks} total={total} />
         </section>
       )}
       {cards.length > 0 && (

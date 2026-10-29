@@ -1,6 +1,6 @@
 import { percentages, sumHalalas } from './money';
 import { addMonths, daysInMonth, monthEnd, monthOf } from './dates';
-import type { Category, Expense, Halalas, ISODate, MonthKey, MonthlyTotal, SmsMeta } from './types';
+import type { Card, Category, Expense, Halalas, ISODate, MonthKey, MonthlyTotal, SmsMeta } from './types';
 
 export interface CategorySlice {
   categoryId: string;
@@ -157,14 +157,29 @@ export const PAYMENT_LABELS: Record<string, string> = {
   bill_payment: 'سداد فواتير', other: 'أخرى',
 };
 
-/** وصف البطاقة: «مدى •4321» أو «فيزا ائتمانية •8812» */
-export function cardLabel(meta: SmsMeta | null | undefined): string | null {
+export const BANK_LABELS: Record<string, string> = {
+  alrajhi: 'الراجحي', alinma: 'الإنماء', snb: 'الأهلي', riyad: 'الرياض', sab: 'ساب', anb: 'العربي',
+  albilad: 'البلاد', aljazira: 'الجزيرة', bsf: 'الفرنسي', saib: 'الاستثمار', gib: 'ميم (الخليج الدولي)',
+  stcbank: 'STC Bank', barq: 'برق', urpay: 'urpay', d360: 'D360', vision: 'Vision Bank', other: 'بنك آخر',
+};
+export const bankLabel = (code?: string | null) => (code ? BANK_LABELS[code] ?? code : null);
+
+/** وصف البطاقة: «الإنماء · مدى •4321» أو «الراجحي · فيزا ائتمانية •8812» (أو اسمها المختصر) */
+export function cardLabel(meta: SmsMeta | null | undefined, cards?: ReadonlyMap<string, Card>): string | null {
   if (!meta) return null;
+  const known = meta.card_last4 ? cards?.get(meta.card_last4) : undefined;
   const last4 = meta.card_last4 ? ` •${meta.card_last4}` : '';
-  if (meta.card_type) {
-    const credit = meta.card_kind === 'credit' && meta.card_type !== 'mada' ? ' ائتمانية' : '';
-    return `${CARD_TYPE_LABELS[meta.card_type] ?? 'بطاقة'}${credit}${last4}`;
+  const nickname = known?.nickname || meta.card_nickname;
+  if (nickname) return `${nickname}${last4}`;
+  const bank = bankLabel(known?.bank ?? meta.bank);
+  const type = known?.card_type ?? meta.card_type;
+  const kind = known?.card_kind ?? meta.card_kind;
+  const prefix = bank ? `${bank} · ` : '';
+  if (type) {
+    const credit = kind === 'credit' && type !== 'mada' ? ' ائتمانية' : '';
+    return `${prefix}${CARD_TYPE_LABELS[type] ?? 'بطاقة'}${credit}${last4}`;
   }
+  if (bank) return `${bank}${last4}`;
   if (meta.payment_method === 'mada') return `مدى${last4}`;
   if (meta.payment_method === 'credit_card') return `بطاقة ائتمانية${last4}`;
   return last4 ? `بطاقة${last4}` : null;
@@ -179,11 +194,38 @@ export function channelLabel(meta: SmsMeta | null | undefined): string | null {
 
 export interface MethodTotal { key: string; label: string; total: Halalas; count: number }
 
-/** الصرف حسب البطاقة (مدى / فيزا / …) — كلها مصروفات، لكن كل بطاقة مميزة */
-export function byPaymentMethod(expenses: readonly Expense[]): MethodTotal[] {
+/** وصف بطاقة العملية للتجميع والفلترة */
+export const expenseCard = (e: Pick<Expense, 'sms_meta'>, cards?: ReadonlyMap<string, Card>) =>
+  e.sms_meta ? (cardLabel(e.sms_meta, cards) ?? 'بطاقة غير معروفة') : 'إدخال يدوي';
+
+/** بنك العملية للتجميع والفلترة */
+export function expenseBank(e: Pick<Expense, 'sms_meta'>, cards?: ReadonlyMap<string, Card>): string {
+  if (!e.sms_meta) return 'إدخال يدوي';
+  const code = (e.sms_meta.card_last4 && cards?.get(e.sms_meta.card_last4)?.bank) || e.sms_meta.bank;
+  return bankLabel(code) ?? 'بنك غير معروف';
+}
+
+function groupTotals(expenses: readonly Expense[], keyOf: (e: Expense) => string): MethodTotal[] {
   const map = new Map<string, MethodTotal>();
   for (const e of expenses) {
-    const label = e.sms_meta ? (cardLabel(e.sms_meta) ?? 'بطاقة غير معروفة') : 'إدخال يدوي';
+    const label = keyOf(e);
+    const cur = map.get(label) ?? { key: label, label, total: 0, count: 0 };
+    cur.total += e.amount;
+    cur.count += 1;
+    map.set(label, cur);
+  }
+  return [...map.values()].sort((a, b) => b.total - a.total);
+}
+
+/** الصرف حسب البنك */
+export const byBank = (expenses: readonly Expense[], cards?: ReadonlyMap<string, Card>) =>
+  groupTotals(expenses, (e) => expenseBank(e, cards));
+
+/** الصرف حسب البطاقة (مدى / فيزا / …) — كلها مصروفات، لكن كل بطاقة مميزة */
+export function byPaymentMethod(expenses: readonly Expense[], cards?: ReadonlyMap<string, Card>): MethodTotal[] {
+  const map = new Map<string, MethodTotal>();
+  for (const e of expenses) {
+    const label = expenseCard(e, cards);
     const cur = map.get(label) ?? { key: label, label, total: 0, count: 0 };
     cur.total += e.amount;
     cur.count += 1;
@@ -198,4 +240,14 @@ export function monthProjection(spent: Halalas, month: MonthKey, today: ISODate)
   const day = Number(today.slice(8, 10));
   if (day < 3) return null;
   return Math.round((spent / day) * daysInMonth(month));
+}
+
+/** شرح تحويل العملة: «12.5 GBP × 4.99 + رسوم 2.5%» */
+export function fxLabel(meta: SmsMeta | null | undefined): string | null {
+  if (!meta?.original_currency || !meta.original_amount) return null;
+  const base = `${meta.original_amount} ${meta.original_currency}`;
+  if (!meta.fx_rate) return base;
+  const src = meta.fx_source === 'peg' ? 'سعر الربط الثابت' : 'سعر صرف اليوم';
+  const fee = meta.fx_fee_pct ? ` + رسوم ${meta.fx_fee_pct}%` : '';
+  return `${base} × ${Number(meta.fx_rate).toFixed(4)} (${src})${fee}`;
 }

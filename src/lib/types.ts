@@ -11,6 +11,21 @@ export interface Household {
   currency: string;
   monthly_budget: Halalas | null;
   invite_code: string;
+  /** نسبة رسوم العمليات الأجنبية الافتراضية (%) */
+  fx_fee_pct?: number;
+}
+
+/** بطاقة عرفها التطبيق من رسائل البنك */
+export interface Card {
+  household_id: string;
+  card_last4: string;
+  bank: string | null;
+  card_type: string | null;
+  card_kind: string | null;
+  nickname: string | null;
+  fx_fee_pct: number | null;
+  first_seen: string;
+  last_seen: string;
 }
 
 export interface Member {
@@ -65,6 +80,14 @@ export interface SmsMeta {
   channel?: 'apple_pay' | 'pos' | 'online' | 'bill_payment' | 'other';
   /** حقل قديم (قبل التفريق بين البطاقة وطريقة الدفع) */
   payment_method?: PaymentMethod;
+  bank?: string;
+  card_nickname?: string;
+  /** تحويل العملة */
+  fx_rate?: number;
+  fx_source?: 'peg' | 'live' | 'sar';
+  fx_provider?: string;
+  fx_fee_pct?: number;
+  fees_sar?: number;
   confidence?: number;
   approx?: boolean;
   rule?: boolean;

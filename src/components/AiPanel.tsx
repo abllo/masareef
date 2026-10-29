@@ -9,7 +9,7 @@ import { CATEGORY_DEPENDENT, useAiStatus, useCategories, useCategoryAudit, useIn
 import { applyCategoryPlan, deleteRule, previewSms, requestCategoryPlan, undoCategoryBatch } from '../lib/api';
 import { formatDayShort } from '../lib/dates';
 import { formatSAR } from '../lib/money';
-import { cardLabel, channelLabel } from '../lib/stats';
+import { bankLabel, cardLabel, channelLabel, fxLabel } from '../lib/stats';
 import type { CategoryAudit, CategoryPlan, PlanOp, SmsParseResult } from '../lib/types';
 import { Button, Card, cx, IconButton } from './ui';
 
@@ -147,9 +147,11 @@ function ParseResultView({ result }: { result: SmsParseResult }) {
     ['المتجر', result.merchant],
     ['التصنيف', m?.new_category ? `«${m.new_category}» (تصنيف جديد بيُنشأ)` : result.category_name],
     ['التاريخ', result.date && formatDayShort(result.date)],
+    ['البنك', bankLabel(m?.bank) ?? undefined],
     ['البطاقة', cardLabel(m) ?? undefined],
     ['طريقة الدفع', channelLabel(m) ?? undefined],
-    ['المبلغ الأصلي', m?.original_amount && m.original_currency !== 'SAR' ? `${m.original_amount} ${m.original_currency}` : undefined],
+    ['التحويل', fxLabel(m) ?? undefined],
+    ['الرسوم', m?.fees_sar ? `${m.fees_sar} ر.س (مضافة للمبلغ)` : undefined],
   ];
   return (
     <div className="mt-3 rounded-2xl bg-brand-soft/60 px-4 py-3 text-sm">

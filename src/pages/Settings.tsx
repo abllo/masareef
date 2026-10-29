@@ -4,6 +4,7 @@ import {
   ArrowsClockwise, ChatCircleText, Copy, Key, SignOut, Plus, Tag, Target, UserMinus, UsersThree,
 } from '@phosphor-icons/react';
 import { AiPanel } from '../components/AiPanel';
+import { CardsSection } from '../components/CardsSection';
 import { Button, Card, CategoryIcon, ConfirmButton, Field, IconButton, Sheet, cx } from '../components/ui';
 import { useHousehold } from '../hooks/household';
 import { useCategories, useDeleteCategory, useInvalidate, useSaveCategory, useUpdateHousehold } from '../hooks/queries';
@@ -23,6 +24,7 @@ export default function Settings() {
       <FamilySection />
       <SmsSection />
       <AiPanel />
+      <CardsSection />
       <CategoriesSection />
       <PasswordSection />
       <Button variant="ghost" className="w-full text-danger" onClick={() => supabase.auth.signOut()}>
