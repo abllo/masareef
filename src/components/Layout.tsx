@@ -3,6 +3,7 @@ import { NavLink } from 'react-router';
 import { GearSix, House, ListBullets, Plus, Repeat, type Icon } from '@phosphor-icons/react';
 import { useHousehold } from '../hooks/household';
 import { useRealtimeSync } from '../hooks/realtime';
+import { usePushRefresh } from '../hooks/push';
 import type { Expense } from '../lib/types';
 import { cx } from './ui';
 import { ExpenseSheet } from './ExpenseSheet';
@@ -25,6 +26,7 @@ const NAV: { to: string; label: string; icon: Icon; end?: boolean }[] = [
 export function Layout({ children }: { children: ReactNode }) {
   const { household } = useHousehold();
   useRealtimeSync(household.id);
+  usePushRefresh();
 
   const [state, setState] = useState<{ open: boolean; expense?: Expense; draft?: ExpenseDraft }>({ open: false });
   const open = useCallback((expense?: Expense, draft?: ExpenseDraft) => setState({ open: true, expense, draft }), []);

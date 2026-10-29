@@ -5,6 +5,7 @@ import {
 } from '@phosphor-icons/react';
 import { AiPanel } from '../components/AiPanel';
 import { CardsSection } from '../components/CardsSection';
+import { NotificationsCard } from '../components/Notifications';
 import { Button, Card, CategoryIcon, ConfirmButton, Field, IconButton, Sheet, cx } from '../components/ui';
 import { useHousehold } from '../hooks/household';
 import { useCategories, useDeleteCategory, useInvalidate, useSaveCategory, useUpdateHousehold } from '../hooks/queries';
@@ -20,6 +21,7 @@ export default function Settings() {
   return (
     <div className="space-y-5 pt-4">
       <h1 className="text-xl font-bold">الإعدادات</h1>
+      <NotificationsCard />
       <BudgetSection />
       <FamilySection />
       <SmsSection />

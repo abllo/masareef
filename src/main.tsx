@@ -6,6 +6,7 @@ import { Toaster } from 'sonner';
 import { MotionConfig } from 'motion/react';
 import App from './App';
 import { AuthProvider } from './hooks/auth';
+import { registerServiceWorker } from './lib/push';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -13,6 +14,8 @@ const queryClient = new QueryClient({
     queries: { staleTime: 30_000, refetchOnWindowFocus: false, retry: 1 },
   },
 });
+
+registerServiceWorker();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

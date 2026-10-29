@@ -190,3 +190,8 @@ export interface MonthlyTotal {
   total: Halalas;
   tx_count: number;
 }
+
+// ---------- الإشعارات ----------
+export type NotifyKey = 'self' | 'family' | 'budget' | 'recurring' | 'monthly' | 'sms_issue';
+export type NotifyPrefs = Record<NotifyKey, boolean>;
+export interface PushStatus { prefs: NotifyPrefs; devices: number; public_key: string | null }

@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import type {
   AiStatus, Card, Category, CategoryAudit, CategoryPlan, Expense, Household, ISODate, Member, MerchantRule, MonthKey, MonthlyTotal, MonthReport,
-  PlanOp, PlanResult, Recurring, SmsLogEntry, SmsParseResult,
+  NotifyPrefs, PlanOp, PlanResult, PushStatus, Recurring, SmsLogEntry, SmsParseResult,
 } from './types';
 
 /** يرمي خطأ مقروءاً بالعربية عند فشل الطلب */
@@ -24,6 +24,7 @@ export function translateError(message: string, code?: string): string {
   if (/ai not enabled/i.test(message)) return 'الذكاء الاصطناعي غير مفعّل بعد: أضف مفتاح Claude في Supabase';
   if (/ai unavailable/i.test(message)) return 'تعذّر الوصول لـ Claude الآن، جرّب بعد قليل';
   if (/core category/i.test(message)) return 'هذا تصنيف أساسي مثبّت، لا يمكن حذفه (تقدر تغيّر اسمه أو لونه)';
+  if (/invalid subscription/i.test(message)) return 'تعذّر تفعيل الإشعارات على هذا الجهاز';
   if (/no expenses/i.test(message)) return 'ما فيه عمليات في هذا الشهر للتحليل';
   if (/statement timeout|canceling statement/i.test(message)) return 'أخذ وقتاً أطول من المتوقع، جرّب مرة ثانية';
   if (/same_password|different from the old/i.test(message)) return 'كلمة المرور الجديدة مطابقة للقديمة';
@@ -273,3 +274,30 @@ export async function saveCard(householdId: string, last4: string, patch: Partia
 export const deleteCard = async (householdId: string, last4: string) => {
   check(await supabase.from('cards').delete().eq('household_id', householdId).eq('card_last4', last4));
 };
+
+// ---------- الإشعارات ----------
+export const fetchPushStatus = async () => check(await supabase.rpc('my_push_status')) as PushStatus;
+
+export async function pushSubscribe(sub: PushSubscriptionJSON, device: string) {
+  check(await supabase.rpc('push_subscribe', {
+    p_endpoint: sub.endpoint, p_p256dh: sub.keys?.p256dh, p_auth: sub.keys?.auth, p_device: device,
+  }));
+}
+
+export const pushUnsubscribe = async (endpoint: string) => {
+  check(await supabase.rpc('push_unsubscribe', { p_endpoint: endpoint }));
+};
+
+export const setPushPrefs = async (prefs: Partial<NotifyPrefs>) =>
+  check(await supabase.rpc('push_set_prefs', { p_prefs: prefs })) as NotifyPrefs;
+
+async function callPush<T>(action: 'init' | 'test'): Promise<T> {
+  const { data, error } = await supabase.functions.invoke('push', { body: { action } });
+  if (error) {
+    const status = (error as { context?: Response }).context?.status;
+    throw new Error(status === 404 ? 'خدمة الإشعارات غير مفعّلة بعد في Supabase' : 'تعذّر الوصول لخدمة الإشعارات، جرّب بعد قليل');
+  }
+  return data as T;
+}
+export const initPush = () => callPush<{ publicKey: string }>('init');
+export const sendTestPush = () => callPush<{ sent: number; failed: unknown[] }>('test');

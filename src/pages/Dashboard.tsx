@@ -4,6 +4,7 @@ import { Alarm, CaretLeft, ChartPieSlice, Receipt, Target, TrendDown, TrendUp } 
 import { CategoryDonut, MonthlyBars } from '../components/Charts';
 import { AiReportCard, InsightsCard } from '../components/Insights';
 import { ExpenseRow } from '../components/ExpenseList';
+import { PushPrompt } from '../components/Notifications';
 import { useExpenseSheet } from '../components/Layout';
 import { Logo } from '../components/Logo';
 import { AnimatedAmount, Button, Card, CategoryIcon, EmptyState, MonthSwitcher, SectionTitle, Spinner, cx } from '../components/ui';
@@ -49,6 +50,8 @@ export default function Dashboard() {
         </div>
         <MonthSwitcher month={month} onChange={setMonth} />
       </header>
+
+      <PushPrompt />
 
       {/* البطاقة الرئيسية: إجمالي الشهر والميزانية */}
       <section className="hero relative overflow-hidden rounded-card p-5 shadow-lg shadow-brand/20">
