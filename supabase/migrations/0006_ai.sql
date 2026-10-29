@@ -492,6 +492,18 @@ confidence: 0 to 1.$sys$,
     'note', v_ai_note));
 end $$;
 
+-- نص إشعار الاختصار (يذكر المبلغ الأصلي عند التحويل من عملة أجنبية)
+create or replace function public.sms_notice(r jsonb)
+returns text language sql immutable as $$
+  select format('تم تسجيل %s%s ر.س · %s ← %s%s',
+    case when (r->'meta'->>'approx') = 'true' then '≈' else '' end,
+    to_char((r->>'amount')::numeric / 100.0, 'FM999999990.00'),
+    coalesce(r->>'merchant', 'رسالة البنك'),
+    r->>'category_name',
+    case when r->'meta' ? 'original_currency'
+         then format(' (%s %s)', r->'meta'->>'original_amount', r->'meta'->>'original_currency') else '' end)
+$$;
+
 -- =====================================================================
 --  الاختصار: يستقبل الرسالة ويسجّلها
 -- =====================================================================
@@ -566,9 +578,7 @@ begin
   values (t.household_id, t.user_id, v_logmsg, 'recorded', r->>'note', r->>'source', v_id, r);
   delete from sms_log where household_id = t.household_id and received_at < now() - interval '180 days';
 
-  return format('تم تسجيل %s%s ر.س · %s ← %s',
-    case when (r->'meta'->>'approx') = 'true' then '≈' else '' end,
-    to_char(v_amount / 100.0, 'FM999999990.00'), v_label, r->>'category_name');
+  return public.sms_notice(r);
 end $$;
 
 revoke all on function public.sms_expense(text, text) from public;

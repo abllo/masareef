@@ -148,9 +148,16 @@ returns jsonb language sql stable security definer set search_path = public as $
     'top_merchants', (select coalesce(jsonb_agg(jsonb_build_object('merchant', label, 'sar', sar, 'count', n) order by sar desc), '[]')
                       from (select label, round(sum(amount) / 100.0, 2) as sar, count(*) as n from cur where label <> '' group by label order by 2 desc limit 8) t),
     'by_card', (select coalesce(jsonb_agg(jsonb_build_object('card', card, 'sar', sar, 'count', n) order by sar desc), '[]')
-                from (select coalesce(nullif(concat_ws(' ', sms_meta->>'card_type', sms_meta->>'card_kind', sms_meta->>'card_last4'), ''),
+                from (select coalesce(nullif(concat_ws(' ', sms_meta->>'card_nickname', sms_meta->>'bank', sms_meta->>'card_type', sms_meta->>'card_kind', sms_meta->>'card_last4'), ''),
                                       case when sms_meta is null then 'manual' else 'bank_sms_unknown_card' end) as card,
                              round(sum(amount) / 100.0, 2) as sar, count(*) as n from cur group by 1) t),
+    'by_bank', (select coalesce(jsonb_agg(jsonb_build_object('bank', bank, 'sar', sar, 'count', n) order by sar desc), '[]')
+                from (select coalesce(sms_meta->>'bank', case when sms_meta is null then 'manual' else 'unknown' end) as bank,
+                             round(sum(amount) / 100.0, 2) as sar, count(*) as n from cur group by 1) t),
+    'foreign_currency', (select coalesce(jsonb_agg(jsonb_build_object('currency', cur_code, 'original', orig, 'sar', sar, 'count', n)), '[]')
+                from (select sms_meta->>'original_currency' as cur_code, sum((sms_meta->>'original_amount')::numeric) as orig,
+                             round(sum(amount) / 100.0, 2) as sar, count(*) as n
+                      from cur where sms_meta ? 'original_currency' group by 1) t),
     'by_member', (select coalesce(jsonb_agg(jsonb_build_object('member', who, 'sar', sar) order by sar desc), '[]')
                   from (select coalesce(hm.display_name, 'عضو سابق') as who, round(sum(cur.amount) / 100.0, 2) as sar
                         from cur left join household_members hm on hm.user_id = cur.created_by and hm.household_id = p_household group by 1) t),
@@ -200,6 +207,7 @@ Rules:
 - If is_current_month is true the month is not finished: compare with previous_month_same_period_sar, not the full previous month, and mention projected_month_total_sar when present.
 - Compare against the budget when monthly_budget_sar is present.
 - Point out what actually changed (categories that rose or fell notably), the biggest merchants, unusual large transactions, unpaid recurring expenses, and possible subscriptions not yet added as fixed expenses.
+- Mention spending in foreign currencies (foreign_currency: original amount and its SAR) when present, and the split by bank (by_bank: alrajhi=الراجحي, alinma=الإنماء, snb=الأهلي, riyad=الرياض, sab=ساب, anb=العربي, albilad=البلاد, aljazira=الجزيرة, bsf=الفرنسي, saib=الاستثمار, gib=ميم, stcbank=STC Bank, barq=برق, urpay, d360, vision; manual = added by hand) when it is informative.
 - Tips must be practical and specific to this data (2–4 tips). No generic advice.
 - headline: one sentence. highlights: 3–5 bullets. alerts: 0–3 bullets (only real issues). tips: 2–4 bullets.$sys$,
     'Facts:' || E'\n' || v_facts::text,
