@@ -2,13 +2,13 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
 import { toast } from 'sonner';
 import {
-  AirplaneTilt, ArrowRight, ArrowsClockwise, BellRinging, CaretLeft, ChartBar, ChatCircleText, Copy, CreditCard, Key, Repeat,
+  AirplaneTilt, ArrowsClockwise, BellRinging, CaretLeft, ChartBar, ChatCircleText, Copy, CreditCard, Key, Repeat,
   SignOut, Plus, Sparkle, Tag, Target, UserCircle, UserMinus, UsersThree, type Icon,
 } from '@phosphor-icons/react';
 import { AiPanel } from '../components/AiPanel';
 import { CardsSection } from '../components/CardsSection';
 import { NotificationsCard } from '../components/Notifications';
-import { Button, Card, CategoryIcon, ConfirmButton, Field, IconButton, Sheet, cx } from '../components/ui';
+import { BackButton, Button, Card, CategoryIcon, ConfirmButton, Field, IconButton, Sheet, cx } from '../components/ui';
 import { useHousehold, useIsOwner } from '../hooks/household';
 import { useAiStatus, useCards, useCategories, useDeleteCategory, useInvalidate, useSaveCategory, useUpdateHousehold } from '../hooks/queries';
 import { usePushStatus } from '../hooks/push';
@@ -40,9 +40,7 @@ export default function Settings() {
   if (!s || (s.owner && !isOwner)) return <SettingsHome />;
   return (
     <div className="space-y-4 pt-4">
-      <Link to="/settings" className="inline-flex items-center gap-1 text-sm font-semibold text-muted">
-        <ArrowRight className="size-4" weight="bold" /> الإعدادات
-      </Link>
+      <BackButton fallback="/settings" label="الإعدادات" />
       {s.render()}
     </div>
   );

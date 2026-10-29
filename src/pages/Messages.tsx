@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ArrowsClockwise, ChatCircleText, CheckCircle, Copy, LinkSimple, PlusCircle, Prohibit, Sparkle, Trash } from '@phosphor-icons/react';
 import { useExpenseSheet } from '../components/Layout';
-import { Button, EmptyState, IconButton, Spinner, cx } from '../components/ui';
+import { BackButton, Button, EmptyState, IconButton, Spinner, cx } from '../components/ui';
 import { useCanEdit } from '../hooks/household';
 import { useInvalidate, useSmsLog } from '../hooks/queries';
 import { deleteSmsLog, fetchExpense } from '../lib/api';
@@ -43,8 +43,9 @@ export default function Messages() {
 
   return (
     <div className="space-y-4 pt-4">
-      <header className="flex items-center justify-between gap-2">
-        <h1 className="text-xl font-bold">رسائل البنك</h1>
+      <header className="flex items-center gap-2">
+        <BackButton fallback="/expenses" />
+        <h1 className="flex-1 text-xl font-bold">رسائل البنك</h1>
         <IconButton label="تحديث" className="bg-surface shadow-sm" onClick={() => refetch()}>
           <ArrowsClockwise className={cx('size-5', isFetching && 'animate-spin')} weight="bold" />
         </IconButton>

@@ -6,7 +6,7 @@ import {
   AirplaneTilt, Archive, Bank, ChartBar, CheckCircle, CreditCard, FileXls, Globe, Storefront, TrendDown, TrendUp, Users, Warning,
 } from '@phosphor-icons/react';
 import { MonthlyByYear, YearTotalsBars } from '../components/YearCharts';
-import { Button, Card, CategoryIcon, EmptyState, Field, Sheet, Spinner, cx } from '../components/ui';
+import { BackButton, Button, Card, CategoryIcon, EmptyState, Field, Sheet, Spinner, cx } from '../components/ui';
 import { useHousehold, useIsOwner } from '../hooks/household';
 import { EXPENSE_DEPENDENT, useCards, useCategories, useTrips, useYears } from '../hooks/queries';
 import { archiveYear, fetchAllExpenses } from '../lib/api';
@@ -61,7 +61,7 @@ export default function YearsPage() {
   if (!selected) {
     return (
       <div className="space-y-4 pt-4">
-        <h1 className="text-xl font-bold">المقارنة السنوية</h1>
+        <header className="flex items-center gap-2"><BackButton /><h1 className="text-xl font-bold">المقارنة السنوية</h1></header>
         <EmptyState icon={ChartBar} title="ما فيه بيانات بعد">مع أول مصروف تبدأ المقارنة السنوية.</EmptyState>
       </div>
     );
@@ -71,9 +71,9 @@ export default function YearsPage() {
   return (
     <div className="space-y-5 pt-4">
       <header className="space-y-3">
-        <div>
+        <div className="flex items-center gap-2">
+          <BackButton />
           <h1 className="text-xl font-bold">المقارنة السنوية</h1>
-          <p className="mt-1 text-sm text-muted">كل سنة محفوظة بتفاصيلها للمقارنة، حتى بعد أرشفتها.</p>
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1">
           {years.map((y) => (

@@ -1,7 +1,8 @@
 import { useEffect, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from 'react';
 import { Drawer } from 'vaul';
 import { animate } from 'motion';
-import { CaretDown, CaretLeft, CaretRight, CircleNotch, type Icon } from '@phosphor-icons/react';
+import { useNavigate } from 'react-router';
+import { ArrowRight, CaretDown, CaretLeft, CaretRight, CircleNotch, type Icon } from '@phosphor-icons/react';
 import { addMonths, formatMonth, monthOf, todayISO } from '../lib/dates';
 import { iconFor } from '../lib/icons';
 import { formatSAR } from '../lib/money';
@@ -212,4 +213,16 @@ export function AnimatedAmount({ value, className }: { value: number; className?
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
   return <span className={cx('num', className)}>{formatSAR(shown)}</span>;
+}
+
+/** زر الرجوع: للصفحة السابقة، أو لصفحة بديلة إذا انفتحت الصفحة مباشرة */
+export function BackButton({ fallback = '/', label = 'رجوع' }: { fallback?: string; label?: string }) {
+  const navigate = useNavigate();
+  const canGoBack = ((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0;
+  return (
+    <button type="button" aria-label={label} title={label} onClick={() => (canGoBack ? navigate(-1) : navigate(fallback))}
+      className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-surface text-ink shadow-sm transition active:scale-95">
+      <ArrowRight className="size-5" weight="bold" />
+    </button>
+  );
 }

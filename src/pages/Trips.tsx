@@ -1,9 +1,9 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
-import { AirplaneTilt, ArrowRight, CalendarBlank, CheckCircle, CreditCard, PencilSimple, Play, Stop, Trash } from '@phosphor-icons/react';
+import { AirplaneTilt, CalendarBlank, CheckCircle, CreditCard, PencilSimple, Play, Stop, Trash } from '@phosphor-icons/react';
 import { ExpenseGroups } from '../components/ExpenseList';
-import { Button, Card, CategoryIcon, ConfirmButton, EmptyState, Field, Sheet, Spinner, cx } from '../components/ui';
+import { BackButton, Button, Card, CategoryIcon, ConfirmButton, EmptyState, Field, Sheet, Spinner, cx } from '../components/ui';
 import { useIsOwner, useMemberName } from '../hooks/household';
 import { useCards, useCategories, useTripActions, useTripExpenses, useTrips } from '../hooks/queries';
 import { countryName, flag } from '../lib/countries';
@@ -41,7 +41,10 @@ function TripList() {
   return (
     <div className="space-y-4 pt-4">
       <header>
-        <h1 className="inline-flex items-center gap-2 text-xl font-bold"><AirplaneTilt className="size-6 text-brand" weight="duotone" />الرحلات</h1>
+        <div className="flex items-center gap-2">
+          <BackButton />
+          <h1 className="inline-flex items-center gap-2 text-xl font-bold"><AirplaneTilt className="size-6 text-brand" weight="duotone" />الرحلات</h1>
+        </div>
         <p className="mt-1 text-sm leading-relaxed text-muted">
           تلقائية بالكامل: أول شراء من محل خارج السعودية يفتح رحلة باسم الدولة، ومصاريفها تنفصل عن مصروف الشهر وميزانيته.
           وتنتهي لحالها أول ما تشتري من محل داخل السعودية، أو بعد 3 أيام بدون مشتريات من الخارج.
@@ -136,7 +139,7 @@ function TripDetail({ id }: { id: string }) {
   return (
     <div className="space-y-4 pt-4">
       <header className="flex items-center justify-between gap-2">
-        <Link to="/trips" className="inline-flex items-center gap-1 text-sm font-semibold text-muted"><ArrowRight className="size-4" weight="bold" /> الرحلات</Link>
+        <BackButton fallback="/trips" />
         {isOwner && (
           <Button variant="secondary" className="h-9 px-3 text-sm" onClick={() => setEditing(true)}>
             <PencilSimple className="size-4" weight="bold" /> تعديل
