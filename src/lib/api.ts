@@ -22,22 +22,22 @@ export function translateError(message: string, code?: string): string {
   if (/owner cannot leave/i.test(message)) return 'منشئ العائلة لا يمكنه المغادرة';
   if (/member not found/i.test(message)) return 'العضو غير موجود';
   if (/not in a household/i.test(message)) return 'حسابك غير مرتبط بعائلة';
-  if (/ai not enabled/i.test(message)) return 'الذكاء الاصطناعي غير مفعّل بعد: أضف مفتاح Claude في Supabase';
-  if (/ai unavailable/i.test(message)) return 'تعذّر الوصول لـ Claude الآن، جرّب بعد قليل';
-  if (/core category/i.test(message)) return 'هذا تصنيف أساسي مثبّت، لا يمكن حذفه (تقدر تغيّر اسمه أو لونه)';
-  if (/year archived/i.test(message)) return 'هذه السنة مؤرشفة: محفوظ ملخصها فقط، فما تقدر تضيف لها عمليات';
-  if (/year not finished/i.test(message)) return 'تقدر تأرشف السنوات المنتهية فقط';
+  if (/ai not enabled/i.test(message)) return 'الذكاء الاصطناعي غير مفعّل';
+  if (/ai unavailable/i.test(message)) return 'تعذّر الاتصال بـ Claude، حاول لاحقاً';
+  if (/core category/i.test(message)) return 'لا يمكن حذف تصنيف أساسي';
+  if (/year archived/i.test(message)) return 'لا يمكن الإضافة إلى سنة مؤرشفة';
+  if (/year not finished/i.test(message)) return 'يمكن أرشفة السنوات المنتهية فقط';
   if (/confirmation mismatch/i.test(message)) return 'اكتب رقم السنة بالضبط للتأكيد';
   if (/year already archived/i.test(message)) return 'هذه السنة مؤرشفة من قبل';
   if (/empty text/i.test(message)) return 'اكتب أو الصق النص أولاً';
   if (/invalid subscription/i.test(message)) return 'تعذّر تفعيل الإشعارات على هذا الجهاز';
-  if (/year has no expenses/i.test(message)) return 'ما فيه عمليات في هذه السنة';
-  if (/no expenses/i.test(message)) return 'ما فيه عمليات في هذا الشهر للتحليل';
-  if (/statement timeout|canceling statement/i.test(message)) return 'أخذ وقتاً أطول من المتوقع، جرّب مرة ثانية';
+  if (/year has no expenses/i.test(message)) return 'لا توجد عمليات في هذه السنة';
+  if (/no expenses/i.test(message)) return 'لا توجد عمليات في هذا الشهر';
+  if (/statement timeout|canceling statement/i.test(message)) return 'انتهت المهلة، حاول مجدداً';
   if (/same_password|different from the old/i.test(message)) return 'كلمة المرور الجديدة مطابقة للقديمة';
   if (/rate limit|too many/i.test(message)) return 'محاولات كثيرة، انتظر قليلاً ثم أعد المحاولة';
   if (/not authorized|Email address .* (is )?invalid|sending .*email/i.test(message))
-    return 'تعذّر إرسال الإيميل لهذا البريد. اطلب من منشئ العائلة تغيير كلمة مرورك من لوحة Supabase';
+    return 'تعذّر الإرسال إلى هذا البريد';
   if (/Invalid login credentials/i.test(message)) return 'البريد أو كلمة المرور غير صحيحة';
   if (/User already registered/i.test(message)) return 'هذا البريد مسجل مسبقاً، سجّل الدخول بدلاً من ذلك';
   if (/Password should be/i.test(message)) return 'كلمة المرور قصيرة، استخدم 6 أحرف أو أرقام على الأقل';
@@ -152,7 +152,7 @@ export async function saveExpense(
     ? supabase.from('expenses').update(input).eq('id', options.id)
     : supabase.from('expenses').insert({ ...input, household_id: householdId });
   const res = await query.select(EXPENSE_COLUMNS).single();
-  if (res.error?.code === 'PGRST116') throw new Error('ما تقدر تعدّل عملية أضافها شخص آخر (لمنشئ العائلة فقط)');
+  if (res.error?.code === 'PGRST116') throw new Error('لا يمكنك تعديل عملية أضافها عضو آخر');
   const saved = check(res) as Expense;
 
   if (options.receipt) {
@@ -169,7 +169,7 @@ export async function saveExpense(
 export async function deleteExpense(expense: Pick<Expense, 'id' | 'receipt_path'>) {
   const { error, count } = await supabase.from('expenses').delete({ count: 'exact' }).eq('id', expense.id);
   if (error) throw new Error(translateError(error.message, error.code));
-  if (count === 0) throw new Error('ما تقدر تحذف عملية أضافها شخص آخر (لمنشئ العائلة فقط)');
+  if (count === 0) throw new Error('لا يمكنك حذف عملية أضافها عضو آخر');
   if (expense.receipt_path) await supabase.storage.from('receipts').remove([expense.receipt_path]);
 }
 
@@ -233,7 +233,7 @@ export const fetchSmsLog = async (householdId: string, limit = 200) =>
 export const deleteSmsLog = async (id: string) => {
   const { error, count } = await supabase.from('sms_log').delete({ count: 'exact' }).eq('id', id);
   if (error) throw new Error(translateError(error.message, error.code));
-  if (count === 0) throw new Error('هذي رسالة شخص آخر، حذفها لمنشئ العائلة فقط');
+  if (count === 0) throw new Error('لا يمكنك حذف رسالة عضو آخر');
 };
 
 export const fetchRules = async (householdId: string) =>
@@ -309,7 +309,7 @@ async function callPush<T>(action: 'init' | 'test'): Promise<T> {
   const { data, error } = await supabase.functions.invoke('push', { body: { action } });
   if (error) {
     const status = (error as { context?: Response }).context?.status;
-    throw new Error(status === 404 ? 'خدمة الإشعارات غير مفعّلة بعد في Supabase' : 'تعذّر الوصول لخدمة الإشعارات، جرّب بعد قليل');
+    throw new Error(status === 404 ? 'خدمة الإشعارات غير متاحة' : 'تعذّر الاتصال بخدمة الإشعارات');
   }
   return data as T;
 }
@@ -385,13 +385,13 @@ export async function saveRenewal(householdId: string, input: RenewalInput, id?:
     ? await supabase.from('renewals').update({ ...input, updated_at: new Date().toISOString() }).eq('id', id).select('id')
     : await supabase.from('renewals').insert({ ...input, household_id: householdId }).select('id');
   const rows = check(res) as { id: string }[];
-  if (id && rows.length === 0) throw new Error('هذا الإجراء لصاحبه أو لمنشئ العائلة');
+  if (id && rows.length === 0) throw new Error('ليست لديك صلاحية لهذا الإجراء');
 }
 
 export async function deleteRenewal(id: string) {
   const { error, count } = await supabase.from('renewals').delete({ count: 'exact' }).eq('id', id);
   if (error) throw new Error(translateError(error.message, error.code));
-  if (count === 0) throw new Error('هذا الإجراء لصاحبه أو لمنشئ العائلة');
+  if (count === 0) throw new Error('ليست لديك صلاحية لهذا الإجراء');
 }
 
 export const renewalDone = async (id: string) => check(await supabase.rpc('renewal_done', { p_id: id })) as Renewal;

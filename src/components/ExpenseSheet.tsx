@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
-import { AirplaneTilt, ArrowSquareOut, Camera, ChatCircleText, CheckCircle, Receipt as ReceiptIcon, ShieldCheck, Sparkle, Trash } from '@phosphor-icons/react';
+import { AirplaneTilt, ArrowSquareOut, Camera, ChatCircleText, CheckCircle, Receipt as ReceiptIcon, ShieldCheck, Trash } from '@phosphor-icons/react';
 import { useNavigate } from 'react-router';
 import { useCards, useCategories, useDeleteExpense, useSaveExpense, useTrips } from '../hooks/queries';
 import { countryName, flag } from '../lib/countries';
@@ -42,13 +42,7 @@ function SmsDetails({ expense }: { expense: Expense }) {
     <div className="flex items-start gap-2 rounded-2xl bg-surface-2 px-3 py-2.5 text-xs leading-relaxed text-muted">
       <ChatCircleText className="mt-0.5 size-4 shrink-0" weight="duotone" />
       <span className="flex-1">
-        {meta.source === 'statement' ? 'من كشف الحساب' : 'من رسالة البنك'}{parts.length > 0 && ` · ${parts.join(' · ')}`}
-        <span className="mt-0.5 flex items-center gap-1">
-          {meta.source === 'statement' ? 'استوردها Claude من الكشف'
-            : meta.rule ? 'التصنيف من قاعدة تعلّمها التطبيق منكم'
-            : meta.source === 'ai' ? <><Sparkle className="size-3.5" weight="fill" /> قرأها وصنّفها Claude</>
-            : 'قراءة محلية (بدون ذكاء اصطناعي)'}
-        </span>
+        {meta.source === 'statement' ? 'كشف الحساب' : 'رسالة البنك'}{parts.length > 0 && ` · ${parts.join(' · ')}`}
       </span>
     </div>
   );
@@ -100,15 +94,6 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
     }).catch(() => null);
     if (!saved) return;
     toast.success(expense ? 'تم حفظ التعديل' : `تمت إضافة ${formatSAR(amount)}`);
-    // تغيير تصنيف عملية من رسالة بنك = قاعدة يتعلّمها التطبيق لهذا المتجر
-    if (expense?.merchant_key && !expense.recurring_id && expense.category_id !== categoryId) {
-      const merchant = expense.sms_meta?.merchant ?? expense.description?.replace(/^📩\s*/, '') ?? '';
-      const cat = categories.find((c) => c.id === categoryId)?.name ?? '';
-      toast(`تعلّمت: عمليات «${merchant}» القادمة تروح لـ «${cat}»`, {
-        description: 'تقدر تعدّل القواعد من الإعدادات ← الذكاء الاصطناعي',
-        icon: <Sparkle className="size-4" weight="fill" />,
-      });
-    }
     onDone();
   }
 
@@ -190,7 +175,7 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           maxLength={200}
-          placeholder="وصف (اختياري): الدانوب، فاتورة الكهرباء…"
+          placeholder="الوصف (اختياري)"
           className="h-12 min-w-0 flex-1 rounded-2xl border border-line bg-surface px-4 text-base outline-none focus:border-brand focus:ring-4 focus:ring-brand/10"
         />
         <button type="button" onClick={() => fileRef.current?.click()}
@@ -240,7 +225,7 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
 
       {readOnly ? (
         <p className="rounded-2xl bg-surface-2 px-4 py-3 text-sm text-muted">
-          أضافها {memberName(expense!.created_by)}. تعديلها وحذفها لصاحبها أو لمنشئ العائلة.
+          أضافها {memberName(expense!.created_by)}
         </p>
       ) : (
       <div className="flex gap-2">
@@ -256,7 +241,7 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
       </div>
       )}
       {expense?.recurring_id && (
-        <p className="text-xs text-muted">هذه دفعة مصروف ثابت. حذفها يعيد حالته إلى «غير مدفوع» لهذا الشهر.</p>
+        <p className="text-xs text-muted">دفعة مصروف ثابت</p>
       )}
     </form>
   );

@@ -33,8 +33,7 @@ export default function Onboarding() {
     <div className="flex min-h-dvh items-center justify-center p-5">
       <div className="w-full max-w-sm">
         <Logo className="mb-5 size-14" />
-        <h1 className="text-2xl font-bold">لنجهّز حسابكم</h1>
-        <p className="mt-2 text-muted">أحدكما ينشئ العائلة، والآخر ينضم برمز الدعوة من صفحة الإعدادات.</p>
+        <h1 className="text-2xl font-bold">إعداد الحساب</h1>
 
         <div className="mt-6 grid grid-cols-2 rounded-2xl bg-surface-2 p-1" role="tablist">
           {(['create', 'join'] as const).map((m) => (
@@ -46,7 +45,7 @@ export default function Onboarding() {
         </div>
 
         <form onSubmit={submit} className="mt-5 space-y-4">
-          <Field label="اسمك كما سيظهر في العمليات" placeholder="أبو محمد، أم محمد…" maxLength={30} required
+          <Field label="اسمك" placeholder="أبو محمد، أم محمد…" maxLength={30} required
             value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           {mode === 'create'
             ? <Field label="اسم العائلة (اختياري)" placeholder="بيت العائلة" maxLength={60} value={householdName} onChange={(e) => setHouseholdName(e.target.value)} />

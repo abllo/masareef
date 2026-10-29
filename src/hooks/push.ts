@@ -48,7 +48,7 @@ export function usePush() {
     } catch (e) {
       setAvailability(pushAvailability());
       if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
-        throw new Error('رفضت الإذن. فعّله من إعدادات الآيفون ← الإشعارات ← مصاريف');
+        throw new Error('الإذن مرفوض. فعّله من الإعدادات ← الإشعارات ← مصاريف');
       }
       throw new Error(`تعذّر تفعيل الإشعارات: ${(e as Error).message}`);
     }

@@ -212,11 +212,11 @@ export function useTripActions() {
     }),
     status: useMutation({
       mutationFn: (v: { id: string; active: boolean }) => api.setTripStatus(v.id, v.active),
-      onSuccess: (_d, v) => toast.success(v.active ? 'رجعت الرحلة جارية' : 'انتهت الرحلة'), onSettled: done, onError,
+      onSuccess: (_d, v) => toast.success(v.active ? 'تم استئناف الرحلة' : 'انتهت الرحلة'), onSettled: done, onError,
     }),
     remove: useMutation({
       mutationFn: api.deleteTrip,
-      onSuccess: () => toast.success('حذفت الرحلة، ومصاريفها رجعت لمصاريف الشهر'), onSettled: done, onError,
+      onSuccess: () => toast.success('تم حذف الرحلة'), onSettled: done, onError,
     }),
   };
 }

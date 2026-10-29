@@ -62,7 +62,7 @@ export default function YearsPage() {
     return (
       <div className="space-y-4 pt-4">
         <header className="flex items-center gap-2"><BackButton /><h1 className="text-xl font-bold">المقارنة السنوية</h1></header>
-        <EmptyState icon={ChartBar} title="ما فيه بيانات بعد">مع أول مصروف تبدأ المقارنة السنوية.</EmptyState>
+        <EmptyState icon={ChartBar} title="لا توجد بيانات" />
       </div>
     );
   }
@@ -139,7 +139,6 @@ function YearDetails({ year, prev, today }: { year: YearOverview; prev?: YearOve
   const { data: categories = [] } = useCategories();
   const cmp = compareYears(d, prev?.data, today);
   const cats = categoryChanges(d, prev?.data, cmp);
-  const regular = d.regular_total ?? d.total;
   const catOf = (c: (typeof cats)[number]): Category =>
     categories.find((x) => x.id === c.key) ?? { id: c.key, household_id: '', name: c.name, icon: c.icon, color: c.color, sort_order: 0, is_archived: false };
 
@@ -158,7 +157,6 @@ function YearDetails({ year, prev, today }: { year: YearOverview; prev?: YearOve
             </li>
           ))}
         </ul>
-        {regular > 0 && <p className="mt-3 text-xs text-muted">التصنيفات للمصاريف العادية (بدون السفر).</p>}
       </Card>
 
       <Card className="space-y-5">
@@ -246,17 +244,12 @@ function YearDetails({ year, prev, today }: { year: YearOverview; prev?: YearOve
 function ArchiveCard({ year }: { year: YearOverview }) {
   const isOwner = useIsOwner();
   const [open, setOpen] = useState(false);
-  const owner = useHousehold().members.find((m) => m.role === 'owner');
+  if (!isOwner) return null;
   return (
     <Card className="space-y-3">
       <h2 className="inline-flex items-center gap-2 font-bold"><Archive className="size-5 text-brand" weight="duotone" />أرشفة {year.year}</h2>
-      <p className="text-sm leading-relaxed text-muted">
-        يحفظ ملخص السنة كامل (الأشهر، التصنيفات، المتاجر، البنوك، البطاقات، العملات، الرحلات) للمقارنة دائماً،
-        ويحذف عملياتها وصور فواتيرها عشان يوفّر المساحة. اختياري، وما تحتاجه إلا لو كبرت البيانات.
-      </p>
-      {isOwner
-        ? <Button variant="secondary" onClick={() => setOpen(true)}><Archive className="size-5" weight="bold" /> أرشفة {year.year}…</Button>
-        : <p className="text-xs text-muted">الأرشفة لمنشئ العائلة{owner ? ` (${owner.display_name})` : ''}.</p>}
+      <p className="text-sm leading-relaxed text-muted">يحفظ ملخص السنة ويحذف عملياتها وفواتيرها.</p>
+      <Button variant="secondary" onClick={() => setOpen(true)}><Archive className="size-5" weight="bold" /> أرشفة {year.year}…</Button>
       <Sheet open={open} onOpenChange={setOpen} title={`أرشفة ${year.year}`}>
         <ArchiveFlow year={year} onDone={() => setOpen(false)} />
       </Sheet>
@@ -316,7 +309,7 @@ function ArchiveFlow({ year, onDone }: { year: YearOverview; onDone: () => void 
       <div className="grid grid-cols-2 gap-2 text-sm">
         <div className="rounded-2xl bg-surface-2 p-3">
           <p className="font-semibold text-brand">يبقى دائماً ✓</p>
-          <p className="mt-1 text-xs leading-relaxed text-muted">ملخص السنة: الأشهر، التصنيفات، المتاجر، البنوك، البطاقات، العملات، الأشخاص، الرحلات، أكبر العمليات. والتصنيفات والقواعد والبطاقات.</p>
+          <p className="mt-1 text-xs leading-relaxed text-muted">ملخص السنة كاملاً في المقارنة السنوية.</p>
         </div>
         <div className="rounded-2xl bg-danger-soft p-3">
           <p className="font-semibold text-danger">يُحذف نهائياً</p>
@@ -326,7 +319,7 @@ function ArchiveFlow({ year, onDone }: { year: YearOverview; onDone: () => void 
 
       <div className={cx('flex items-center gap-3 rounded-2xl border p-3', saved ? 'border-brand bg-brand-soft' : 'border-line')}>
         <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface font-bold">١</span>
-        <p className="min-w-0 flex-1 text-sm">نزّل نسخة Excel كاملة من عمليات {y} واحفظها عندك</p>
+        <p className="min-w-0 flex-1 text-sm">نسخة Excel كاملة من عمليات {y}</p>
         {saved ? <CheckCircle className="size-6 text-brand" weight="fill" /> : (
           <Button variant="secondary" className="h-10 shrink-0 px-3 text-sm" loading={busy === 'excel'} onClick={downloadExcel}>
             <FileXls className="size-5 text-[#1D7044]" weight="duotone" /> Excel
@@ -346,7 +339,7 @@ function ArchiveFlow({ year, onDone }: { year: YearOverview; onDone: () => void 
       <Button variant="danger" className="w-full" loading={busy === 'archive'} disabled={!saved || confirm.trim() !== String(y)} onClick={archive}>
         <Warning className="size-5" weight="bold" /> أرشف {y} واحذف عملياتها
       </Button>
-      <p className="text-center text-xs text-muted">ما يمكن التراجع عن الحذف، لكن الملخص يبقى في المقارنة السنوية للأبد.</p>
+      <p className="text-center text-xs text-muted">لا يمكن التراجع عن الحذف.</p>
     </div>
   );
 }

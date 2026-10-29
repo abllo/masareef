@@ -181,7 +181,7 @@ function BudgetSection() {
         {household.monthly_budget ? `الحالية: ${formatSAR(household.monthly_budget)}` : 'غير محددة'}
       </p>
       {isOwner && <form onSubmit={submit} className="mt-4 flex items-end gap-2">
-        <Field label="المبلغ (ر.س)" inputMode="decimal" dir="ltr" placeholder="مثال: 12000" className="flex-1"
+        <Field label="المبلغ (ر.س)" inputMode="decimal" dir="ltr" placeholder="12000" className="flex-1"
           value={text} onChange={(e) => setText(e.target.value)} />
         <Button type="submit" loading={update.isPending}>حفظ</Button>
       </form>}
@@ -203,7 +203,7 @@ function FamilySection() {
     try {
       await regenerateInviteCode();
       await invalidate('household');
-      toast.success('تم إنشاء رمز جديد، الرمز القديم لم يعد يعمل');
+      toast.success('تم إنشاء رمز دعوة جديد');
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -269,7 +269,7 @@ function FamilySection() {
       </div>
 
       <div className="rounded-2xl border border-dashed border-line p-4">
-        <p className="text-sm text-muted">رمز الدعوة (يدخله فرد العائلة عند التسجيل)</p>
+        <p className="text-sm text-muted">رمز الدعوة</p>
         <div className="mt-3 flex items-center gap-2">
           <code dir="ltr" className="flex-1 rounded-xl bg-surface-2 py-2.5 text-center text-xl font-bold tracking-[.3em]">
             {household.invite_code}
@@ -330,7 +330,7 @@ function SmsSection() {
     setRotating(true);
     try {
       setToken(await regenerateSmsToken());
-      toast.success('تم إنشاء رمز جديد. حدّثه في الاختصار، القديم توقف');
+      toast.success('تم إنشاء رمز جديد، حدّثه في الاختصار');
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -342,14 +342,13 @@ function SmsSection() {
     <Card className="space-y-4">
       <div>
         <h2 className="inline-flex items-center gap-2 font-bold"><ChatCircleText className="size-5 text-brand" weight="duotone" />التسجيل التلقائي من رسائل البنك</h2>
-        <p className="mt-1 text-sm text-muted">القيم الثلاث اللي يحتاجها الاختصار في الآيفون.</p>
       </div>
       <CopyRow label="1. الرابط" value={endpoint} copied="تم نسخ الرابط" />
       <CopyRow label="2. المفتاح (apikey)" value={SUPABASE_KEY} copied="تم نسخ المفتاح" />
       {token ? (
         <>
           <CopyRow label="3. رمزك الخاص (token)" value={token} copied="تم نسخ رمزك الخاص" />
-          <p className="text-xs text-danger">رمزك خاص بك، لا تعطه أحداً.</p>
+          <p className="text-xs text-danger">لا تشارك هذا الرمز.</p>
           <ConfirmButton className="h-10 px-4 text-sm" loading={rotating} confirmText="تأكيد: الرمز القديم سيتوقف" onConfirm={rotate}>
             <ArrowsClockwise className="size-4" weight="bold" /> تجديد رمزي
           </ConfirmButton>
@@ -361,7 +360,7 @@ function SmsSection() {
       )}
 
       <details className="rounded-2xl bg-surface-2 px-4 py-3 text-sm">
-        <summary className="cursor-pointer font-semibold">طريقة إعداد الاختصار (مرة واحدة)</summary>
+        <summary className="cursor-pointer font-semibold">طريقة إعداد الاختصار</summary>
         <ol className="mt-3 list-decimal space-y-2 ps-5 leading-relaxed text-muted">
           <li>تطبيق <b>الاختصارات</b> ← <b>+</b> ← أضف إجراء <b>«الحصول على محتويات URL»</b>، والصق <b>الرابط</b>.</li>
           <li>اضغط السهم الأزرق: <b>الطريقة POST</b>.</li>
@@ -369,7 +368,7 @@ function SmsSection() {
           <li><b>نص الطلب: JSON</b> ← أضف حقلاً نصياً <code dir="ltr">token</code> وقيمته <b>رمزك الخاص</b>، وحقلاً نصياً <code dir="ltr">message</code> واختر له <b>«مدخل الاختصار»</b> من الشريط فوق الكيبورد.</li>
           <li>سمِّ الاختصار <b>«تسجيل مصروف»</b>.</li>
           <li><b>التحكم التلقائي</b> ← <b>+</b> ← <b>رسالة</b> ← الرسالة تتضمن <b>شراء</b> ← إجراء «تشغيل الاختصار: تسجيل مصروف» بالمدخل <b>إدخال الاختصار</b> ← أطفئ «التأكيد قبل التشغيل».</li>
-          <li>فعّل الإشعارات من الإعدادات ← الإشعارات، عشان يوصلك تأكيد كل عملية.</li>
+          <li>فعّل الإشعارات من الإعدادات ← الإشعارات.</li>
         </ol>
       </details>
     </Card>
@@ -486,14 +485,13 @@ function CategoryForm({ item, nextOrder, onDone }: { item?: Category; nextOrder:
       </fieldset>
       {item?.is_core && (
         <p className="rounded-2xl bg-surface-2 px-4 py-3 text-xs text-muted">
-          تصنيف أساسي مثبّت: تقدر تغيّر اسمه وأيقونته ولونه، لكن ما ينحذف ولا يدمجه الذكاء الاصطناعي.
+          تصنيف أساسي لا يمكن حذفه.
         </p>
       )}
       {item && !item.is_core && (
         <label className="flex items-center justify-between rounded-2xl bg-surface-2 px-4 py-3">
           <span>
             <span className="block font-medium">أرشفة</span>
-            <span className="text-xs text-muted">يختفي من شاشة الإضافة، وتبقى عملياته السابقة</span>
           </span>
           <input type="checkbox" checked={archived} onChange={(e) => setArchived(e.target.checked)} className="size-5 accent-[var(--color-brand)]" />
         </label>

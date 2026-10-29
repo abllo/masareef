@@ -6,15 +6,15 @@ import { sendTestPush } from '../lib/api';
 import type { NotifyKey } from '../lib/types';
 import { Button, Card, cx } from './ui';
 
-const KINDS: { key: NotifyKey; title: string; hint: string }[] = [
-  { key: 'self', title: 'مصروفي من رسالة البنك', hint: 'تم تسجيل 45 ر.س · ستاربكس ← مطاعم' },
-  { key: 'family', title: 'مصاريف العائلة', hint: 'لما أحد من العائلة يسجّل مصروفاً' },
-  { key: 'budget', title: 'تنبيه الميزانية', hint: 'عند الوصول لـ 80% وعند تجاوزها' },
-  { key: 'recurring', title: 'المصاريف الثابتة', hint: 'يوم موعد الدفع الساعة 9 الصبح' },
-  { key: 'monthly', title: 'ملخص الشهر والسنة', hint: 'أول كل شهر، وأول السنة' },
-  { key: 'sms_issue', title: 'رسالة بنك ما انسجلت', hint: 'عملية مرفوضة، أو رسالة ما انقرأت' },
-  { key: 'travel', title: 'الرحلات', hint: 'ميزانية الرحلة، وملخصها لما تنتهي' },
-  { key: 'renewals', title: 'التجديدات والضمانات', hint: 'قبل الموعد بـ 3 أيام ويوم، ويوم الموعد' },
+const KINDS: { key: NotifyKey; title: string }[] = [
+  { key: 'self', title: 'مصاريفي' },
+  { key: 'family', title: 'مصاريف العائلة' },
+  { key: 'budget', title: 'الميزانية' },
+  { key: 'recurring', title: 'المصاريف الثابتة' },
+  { key: 'monthly', title: 'الملخص الشهري' },
+  { key: 'sms_issue', title: 'الرسائل غير المسجّلة' },
+  { key: 'travel', title: 'الرحلات' },
+  { key: 'renewals', title: 'التجديدات والضمانات' },
 ];
 
 function Switch({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
@@ -42,7 +42,7 @@ export function NotificationsCard() {
 
       {push.availability === 'install-first' && (
         <p className="rounded-2xl bg-warn-soft px-4 py-3 text-sm leading-relaxed">
-          افتح «مصاريف» من أيقونته على الشاشة الرئيسية (مو من Safari) عشان تقدر تفعّل الإشعارات.
+          لتفعيل الإشعارات افتح «مصاريف» من الشاشة الرئيسية.
         </p>
       )}
       {push.availability === 'unsupported' && (
@@ -50,7 +50,7 @@ export function NotificationsCard() {
       )}
       {push.availability === 'denied' && (
         <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm leading-relaxed text-danger">
-          الإشعارات مرفوضة لهذا التطبيق. فعّلها من إعدادات الجهاز ← الإشعارات ← مصاريف، ثم ارجع هنا.
+          الإشعارات متوقفة. فعّلها من الإعدادات ← الإشعارات ← مصاريف.
         </p>
       )}
 
@@ -64,8 +64,8 @@ export function NotificationsCard() {
               <Button variant="secondary" className="h-10 px-4 text-sm" loading={busy === 'test'}
                 onClick={() => run('test', async () => {
                   const r = await sendTestPush();
-                  if (!r.sent) throw new Error('ما وصل الإشعار، جرّب إيقاف الإشعارات وتفعيلها من جديد');
-                }, 'أرسلت لك إشعار تجربة')}>
+                  if (!r.sent) throw new Error('لم يصل الإشعار، أعد تفعيل الإشعارات');
+                }, 'تم إرسال إشعار تجريبي')}>
                 <PaperPlaneTilt className="size-4" weight="bold" /> إرسال تجربة
               </Button>
               <Button variant="ghost" className="h-10 px-4 text-sm text-muted" loading={busy === 'off'}
@@ -78,7 +78,7 @@ export function NotificationsCard() {
           <div className="space-y-2">
             <Button className="w-full" loading={busy === 'on' || push.loading} disabled={!push.ready}
               onClick={() => run('on', push.enable, 'تم تفعيل الإشعارات')}>
-              <Bell className="size-5" weight="bold" /> تفعيل الإشعارات على هذا الجهاز
+              <Bell className="size-5" weight="bold" /> تفعيل الإشعارات
             </Button>
           </div>
         )
@@ -90,7 +90,6 @@ export function NotificationsCard() {
             <li key={k.key} className="flex items-center justify-between gap-3 py-3">
               <div className="min-w-0">
                 <p className="text-sm font-semibold">{k.title}</p>
-                <p className="truncate text-xs text-muted">{k.hint}</p>
               </div>
               <Switch label={k.title} checked={prefs[k.key] !== false} disabled={busy === k.key}
                 onChange={(v) => run(k.key, () => push.setPrefs({ [k.key]: v }))} />
@@ -123,7 +122,6 @@ export function PushPrompt() {
       <BellRinging className="size-7 shrink-0 text-brand" weight="duotone" />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-bold">فعّل الإشعارات</p>
-        <p className="text-xs leading-relaxed text-muted">تأكيد كل عملية، والميزانية، والمصاريف الثابتة</p>
       </div>
       <Button className="h-10 shrink-0 px-4 text-sm" loading={busy} disabled={!push.ready}
         onClick={async () => {

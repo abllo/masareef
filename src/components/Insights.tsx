@@ -48,7 +48,7 @@ export function InsightsCard({ list, total, month, today }: { list: Expense[]; t
       <h2 className="inline-flex items-center gap-2 font-bold"><ChartLineUp className="size-5 text-brand" weight="duotone" />تحليلات {formatMonth(month)}</h2>
       {projection !== null && (
         <div className="rounded-2xl bg-surface-2 px-4 py-3">
-          <p className="text-xs text-muted">المتوقع لنهاية الشهر بنفس معدل الصرف</p>
+          <p className="text-xs text-muted">المتوقع لنهاية الشهر</p>
           <p className="num mt-0.5 text-xl font-bold">{formatSAR(projection)}</p>
           {household.monthly_budget && (
             <p className={cx('mt-0.5 text-xs font-medium', projection > household.monthly_budget ? 'text-danger' : 'text-brand')}>
@@ -122,11 +122,8 @@ export function AiReportCard({ month }: { month: MonthKey }) {
       </div>
       {!c ? (
         <div>
-          <p className="text-sm leading-relaxed text-muted">
-            تحليل لمصاريف {formatMonth(month)}: وش تغيّر، وين راحت الفلوس، تنبيهات، واقتراحات مبنية على أرقامكم الفعلية.
-          </p>
-          <Button className="mt-3 h-10 text-sm" onClick={generate} loading={loading}>
-            <Sparkle className="size-4" weight="fill" /> {loading ? 'Claude يحلل… (نصف دقيقة تقريباً)' : 'حلّل الشهر'}
+          <Button className="h-10 text-sm" onClick={generate} loading={loading}>
+            <Sparkle className="size-4" weight="fill" /> {loading ? 'جارٍ التحليل…' : 'حلّل الشهر'}
           </Button>
         </div>
       ) : (
@@ -148,7 +145,7 @@ export function AiReportCard({ month }: { month: MonthKey }) {
             </div>
           )}
           <p className="text-xs text-muted">
-            كل الأرقام محسوبة من عملياتكم مباشرة · آخر تحديث {new Date(report!.created_at).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { timeZone: 'Asia/Riyadh', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
+            آخر تحديث {new Date(report!.created_at).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { timeZone: 'Asia/Riyadh', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
           </p>
         </div>
       )}

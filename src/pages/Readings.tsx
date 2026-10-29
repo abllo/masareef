@@ -89,7 +89,7 @@ function WhenCard({ list }: { list: Expense[] }) {
         <li>نهاية الأسبوع (الجمعة والسبت): {Math.round((weekend / total) * 100)}%</li>
         {early !== null && (
           <li>أول 10 أيام من الشهر: <b>{Math.round(early * 100)}%</b>
-            {early >= 0.45 ? ' · أغلب صرفك بعد الراتب مباشرة' : early <= 0.25 ? ' · صرفك موزّع ومتأخر' : ''}</li>
+            {early >= 0.45 ? ' · معظم الصرف بعد الراتب' : ''}</li>
         )}
       </ul>
     </Card>
@@ -129,7 +129,6 @@ function RecurringCard({ list }: { list: Expense[] }) {
           </li>
         ))}
       </ul>
-      <p className="mt-2 text-xs text-muted">لو أضفتها، يذكّرك التطبيق يوم موعدها ويربط رسالة البنك فيها.</p>
     </Card>
   );
 }

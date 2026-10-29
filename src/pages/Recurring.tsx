@@ -39,9 +39,7 @@ export default function RecurringPage() {
       </Card>
 
       {recurring.isPending || payments.isPending ? <Spinner /> : rows.length === 0 ? (
-        <EmptyState icon={Repeat} title="لا توجد مصاريف ثابتة بعد">
-          أضف رواتب العمالة والفواتير والاشتراكات مرة واحدة، ثم سجّل دفعها كل شهر بضغطة.
-        </EmptyState>
+        <EmptyState icon={Repeat} title="لا توجد مصاريف ثابتة" />
       ) : (
         <div className="space-y-2">
           {rows.map((row) => (
@@ -56,9 +54,7 @@ export default function RecurringPage() {
         <Button variant="secondary" className="w-full" onClick={() => setEditing({ open: true })}>
           <Plus className="size-5" weight="bold" /> إضافة مصروف ثابت
         </Button>
-      ) : (
-        <p className="text-center text-xs text-muted">إضافة المصاريف الثابتة وتعديلها لمنشئ العائلة، وتسجيل الدفع للجميع.</p>
-      )}
+      ) : null}
 
       <Sheet open={editing.open} onOpenChange={(o) => setEditing((s) => ({ ...s, open: o }))}
         title={editing.item ? 'تعديل المصروف الثابت' : 'مصروف ثابت جديد'}>
@@ -145,8 +141,7 @@ function RecurringForm({ item, onDone }: { item?: Recurring; onDone: () => void 
       <Field label="الاسم" value={name} onChange={(e) => setName(e.target.value)} placeholder="راتب العاملة، اشتراك الإنترنت…" maxLength={60} autoFocus={!item} />
       <div className="grid grid-cols-2 gap-3">
         <Field label="المبلغ الشهري (ر.س)" inputMode="decimal" dir="ltr" value={amountText} onChange={(e) => setAmountText(e.target.value)} placeholder="0" />
-        <Field label="يوم الاستحقاق" inputMode="numeric" dir="ltr" value={day} onChange={(e) => setDay(e.target.value.replace(/\D/g, ''))}
-          hint="إذا كان الشهر أقصر يُعتبر آخر يوم فيه" />
+        <Field label="يوم الاستحقاق" inputMode="numeric" dir="ltr" value={day} onChange={(e) => setDay(e.target.value.replace(/\D/g, ''))} />
       </div>
       <Select label="التصنيف" showLabel value={categoryId} onChange={setCategoryId}
         options={[
@@ -157,7 +152,6 @@ function RecurringForm({ item, onDone }: { item?: Recurring; onDone: () => void 
         <label className="flex items-center justify-between rounded-2xl bg-surface-2 px-4 py-3">
           <span>
             <span className="block font-medium">نشط</span>
-            <span className="text-xs text-muted">أوقفه إذا انتهى (يبقى سجل الدفعات السابقة)</span>
           </span>
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="size-5 accent-[var(--color-brand)]" />
         </label>

@@ -74,9 +74,7 @@ export default function Messages() {
       </div>
 
       {isPending ? <Spinner /> : list.length === 0 ? (
-        <EmptyState icon={ChatCircleText} title={data.length ? 'ما فيه رسائل بهذا التصنيف' : 'ما وصلت رسائل بنك بعد'}>
-          {data.length ? null : 'لما يرسل الاختصار رسالة شراء، بتظهر هنا مع وش صار فيها.'}
-        </EmptyState>
+        <EmptyState icon={ChatCircleText} title={data.length ? 'لا توجد رسائل بهذا التصنيف' : 'لا توجد رسائل'} />
       ) : (
         <div className="space-y-5">
           {groups.map(([day, items]) => (
@@ -89,7 +87,6 @@ export default function Messages() {
           ))}
         </div>
       )}
-      <p className="px-2 text-center text-xs text-muted">يحتفظ التطبيق بالرسائل 180 يوماً. رسائل رموز التحقق لا يُحفظ نصها.</p>
     </div>
   );
 }

@@ -56,9 +56,7 @@ export default function RenewalsPage() {
       <SmartAdd onParsed={(draft) => setForm({ draft })} />
 
       {isPending ? <Spinner /> : data.length === 0 ? (
-        <EmptyState icon={ShieldCheck} title="ما فيه تجديدات بعد">
-          تنضاف تلقائياً لما تدفع تأمين أو تجديد أو تشتري جهاز، أو اكتبها فوق.
-        </EmptyState>
+        <EmptyState icon={ShieldCheck} title="لا توجد تجديدات" />
       ) : (
         <>
           <Section title="قريباً" items={soon} today={today} onOpen={(item) => setForm({ item })} />
@@ -126,9 +124,9 @@ function SmartAdd({ onParsed }: { onParsed: (d: Partial<RenewalInput>) => void }
   }
   return (
     <div className="rounded-card bg-surface p-4 shadow-[0_1px_2px_rgb(0_0_0/0.04)]">
-      <p className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold"><Sparkle className="size-4 text-brand" weight="fill" /> أضف بالذكاء</p>
+      <p className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold"><Sparkle className="size-4 text-brand" weight="fill" /> إضافة سريعة</p>
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} dir="auto"
-        placeholder="تأمين السيارة ينتهي 15 مارس… أو الصق رسالة أبشر"
+        placeholder="تأمين السيارة ينتهي 15 مارس"
         className="w-full rounded-2xl border border-line bg-surface-2 p-3 text-base outline-none focus:border-brand focus:ring-4 focus:ring-brand/10" />
       <Button variant="secondary" className="mt-2 h-10 text-sm" loading={busy} disabled={!text.trim()} onClick={run}>
         <MagicWand className="size-4" weight="bold" /> افهمها
@@ -166,7 +164,7 @@ function RenewalForm({ item, draft, onDone }: { item?: Renewal; draft?: Partial<
         amount: a, notes: notes.trim() || null,
         ...(item ? {} : { source: draft?.source ?? 'manual', expense_id: draft?.expense_id ?? null }),
       }, item?.id);
-      toast.success('تم الحفظ، بنبهك قبل الموعد');
+      toast.success('تم الحفظ');
       await refresh();
       onDone();
     } catch (err) {
@@ -200,13 +198,13 @@ function RenewalForm({ item, draft, onDone }: { item?: Renewal; draft?: Partial<
         </div>
       </fieldset>
       {readOnly ? (
-        <p className="rounded-2xl bg-surface-2 px-4 py-3 text-sm text-muted">تعديله لصاحبه أو لمنشئ العائلة.</p>
+        null
       ) : (
         <div className="flex flex-wrap gap-2">
           <Button type="submit" className="flex-1" loading={busy === 'save'}>{item ? 'حفظ' : 'إضافة'}</Button>
           {item?.status === 'active' && (
             <Button type="button" variant="secondary" loading={busy === 'done'}
-              onClick={() => act('done', () => renewalDone(item.id), item.period_months && item.kind !== 'warranty' ? 'تم التجديد، والموعد الجديد انحفظ' : 'تم')}>
+              onClick={() => act('done', () => renewalDone(item.id), item.period_months && item.kind !== 'warranty' ? 'تم التجديد' : 'تم')}>
               <CheckCircle className="size-5" weight="bold" /> {item.period_months && item.kind !== 'warranty' ? 'تم التجديد' : 'انتهى'}
             </Button>
           )}

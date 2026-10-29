@@ -41,7 +41,6 @@ export default function Login() {
         <div className="mb-8">
           <Logo className="mb-5 size-16 drop-shadow-lg" />
           <h1 className="text-3xl font-bold">مصاريف</h1>
-          <p className="mt-2 text-muted">سجّلوا مصاريف العائلة في ثوانٍ، واعرفوا أين يذهب كل ريال.</p>
         </div>
         <form onSubmit={submit} className="space-y-4">
           <Field label="البريد الإلكتروني" type="email" dir="ltr" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />

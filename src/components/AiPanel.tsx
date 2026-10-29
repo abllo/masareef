@@ -71,7 +71,6 @@ function AiStatusHeader() {
           </span>
         )}
       </div>
-      <p className="mt-1 text-sm text-muted">يقرأ رسائل البنك ويصنّفها، ولو تعثّر يكمل بالقراءة المحلية.</p>
       {status?.enabled && (
         <p className="mt-2 text-xs text-muted">
           قرأ <span className="num font-semibold text-ink">{status.ai_messages_24h}</span> رسالة آخر 24 ساعة
@@ -118,7 +117,6 @@ function SmsTester() {
   return (
     <section className="border-t border-line pt-4">
       <h3 className="font-semibold">جرّب رسالة</h3>
-      <p className="mt-0.5 text-xs text-muted">بدون ما تنسجل.</p>
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} dir="auto"
         placeholder={'شراء عبر نقاط البيع\nمبلغ: SAR 45.50\nلدى: STARBUCKS'}
         className="mt-2 w-full rounded-2xl border border-line bg-surface p-3 text-base outline-none focus:border-brand focus:ring-4 focus:ring-brand/10" />
@@ -135,8 +133,8 @@ function ParseResultView({ result }: { result: SmsParseResult }) {
   if (result.status === 'ignored') {
     return (
       <div className="mt-3 rounded-2xl bg-surface-2 px-4 py-3 text-sm">
-        <p className="font-semibold">بيتجاهلها: {result.reason}</p>
-        <p className="mt-1 text-xs text-muted">{result.source === 'ai' ? 'قرار Claude' : 'قراءة محلية'}</p>
+        <p className="font-semibold">سيتم تجاهلها: {result.reason}</p>
+        <p className="mt-1 text-xs text-muted">{result.source === 'ai' ? 'Claude' : 'قراءة محلية'}</p>
       </div>
     );
   }
@@ -159,7 +157,7 @@ function ParseResultView({ result }: { result: SmsParseResult }) {
         ))}
       </dl>
       <p className="mt-2 flex items-center gap-1 text-xs text-muted">
-        {m?.rule ? 'التصنيف من قاعدة متعلَّمة' : result.source === 'ai' ? <><Sparkle className="size-3.5" weight="fill" /> Claude</> : 'قراءة محلية'}
+        {m?.rule ? 'قاعدة تصنيف' : result.source === 'ai' ? <><Sparkle className="size-3.5" weight="fill" /> Claude</> : 'قراءة محلية'}
         {result.note && <> · {result.note}</>}
       </p>
     </div>
@@ -187,7 +185,7 @@ function CategoryOrganizer() {
       const p = await requestCategoryPlan();
       setPlan(p);
       setSelected(new Set(p.operations.map((_, i) => i)));
-      if (!p.operations.length) toast.success('تصنيفاتك مرتبة، ما يحتاج تغيير');
+      if (!p.operations.length) toast.success('لا توجد تغييرات مقترحة');
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -204,7 +202,7 @@ function CategoryOrganizer() {
       await invalidate(...CATEGORY_DEPENDENT);
       setPlan(null);
       toast.success(`تم تطبيق ${res.applied.length} تغيير`, {
-        description: res.skipped.length ? `تجاهلت ${res.skipped.length} لأنها غير آمنة: ${res.skipped.map((s) => s.why).join('، ')}` : 'تقدر تتراجع عنها من «آخر التغييرات»',
+        description: res.skipped.length ? `تم تجاهل ${res.skipped.length}: ${res.skipped.map((s) => s.why).join('، ')}` : undefined,
       });
     } catch (e) {
       toast.error((e as Error).message);
@@ -218,7 +216,7 @@ function CategoryOrganizer() {
     try {
       const n = await undoCategoryBatch(batchId);
       await invalidate(...CATEGORY_DEPENDENT);
-      toast.success(`تم التراجع عن ${n} تغيير، ورجع كل شي مثل ما كان`);
+      toast.success(`تم التراجع عن ${n} تغيير`);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -229,12 +227,8 @@ function CategoryOrganizer() {
   return (
     <section className="border-t border-line pt-4">
       <h3 className="font-semibold">تنظيم التصنيفات</h3>
-      <p className="mt-0.5 text-xs leading-relaxed text-muted">
-        Claude يراجع تصنيفاتكم ومتاجركم ويقترح: دمج المتشابه، توحيد المتجر في تصنيف واحد، إنشاء تصنيف ناقص، وأرشفة غير المستخدم.
-        لا يُحذف إلا تصنيف فارغ، وكل تغيير تقدر تتراجع عنه بالكامل.
-      </p>
       <Button variant="secondary" className="mt-2 h-10 text-sm" onClick={ask} loading={loading === 'plan'} disabled={!status?.enabled}>
-        <MagicWand className="size-4" weight="bold" /> {loading === 'plan' ? 'Claude يراجع… (قد يأخذ نصف دقيقة)' : 'نظّم تصنيفاتي'}
+        <MagicWand className="size-4" weight="bold" /> {loading === 'plan' ? 'جارٍ المراجعة…' : 'نظّم تصنيفاتي'}
       </Button>
 
       {plan && plan.operations.length > 0 && (
@@ -301,7 +295,7 @@ function RulesList() {
     try {
       await deleteRule(household.id, key);
       await invalidate('rules');
-      toast.success(`نسيت قاعدة «${label}»`);
+      toast.success(`تم حذف قاعدة «${label}»`);
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -309,12 +303,9 @@ function RulesList() {
 
   return (
     <section className="border-t border-line pt-4">
-      <h3 className="font-semibold">ما تعلّمه التطبيق منكم</h3>
-      <p className="mt-0.5 text-xs text-muted">
-        لما تغيّرون تصنيف عملية من رسالة بنك، يتذكر المتجر ويصنّفه كذا دائماً. تتقدم هذي القواعد على أي شيء آخر.
-      </p>
+      <h3 className="font-semibold">قواعد التصنيف</h3>
       {rules.length === 0 ? (
-        <p className="mt-2 rounded-xl bg-surface-2 px-3 py-2.5 text-xs text-muted">ما فيه قواعد بعد.</p>
+        <p className="mt-2 rounded-xl bg-surface-2 px-3 py-2.5 text-xs text-muted">لا توجد قواعد.</p>
       ) : (
         <ul className="mt-2 divide-y divide-line rounded-2xl bg-surface-2">
           {rules.map((r) => (

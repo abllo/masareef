@@ -45,13 +45,9 @@ function TripList() {
           <BackButton />
           <h1 className="inline-flex items-center gap-2 text-xl font-bold"><AirplaneTilt className="size-6 text-brand" weight="duotone" />الرحلات</h1>
         </div>
-        <p className="mt-1 text-sm leading-relaxed text-muted">
-          تلقائية بالكامل: أول شراء من محل خارج السعودية يفتح رحلة باسم الدولة، ومصاريفها تنفصل عن مصروف الشهر وميزانيته.
-          وتنتهي لحالها أول ما تشتري من محل داخل السعودية، أو بعد 3 أيام بدون مشتريات من الخارج.
-        </p>
       </header>
       {isPending ? <Spinner /> : trips.length === 0 ? (
-        <EmptyState icon={AirplaneTilt} title="ما فيه رحلات بعد">رحلتكم الجاية بتظهر هنا تلقائياً من رسائل البنك.</EmptyState>
+        <EmptyState icon={AirplaneTilt} title="لا توجد رحلات" />
       ) : (
         <div className="space-y-3">{trips.map((t) => <TripCard key={t.id} trip={t} />)}</div>
       )}
@@ -165,10 +161,6 @@ function TripDetail({ id }: { id: string }) {
         )}
       </section>
 
-      <p className="rounded-2xl bg-surface-2 px-4 py-3 text-xs leading-relaxed text-muted">
-        مصاريف الرحلة منفصلة: ما تدخل في مصروف الشهر ولا ميزانيته، وتظهر كسفر في التقارير والمقارنة السنوية.
-      </p>
-
       {isOwner && (
         <div className="flex flex-wrap gap-2">
           {trip.status === 'active' ? (
@@ -237,7 +229,7 @@ function TripDetail({ id }: { id: string }) {
       <section>
         <h2 className="mb-2 px-2 font-bold">العمليات</h2>
         {list.length === 0 && !loadingList
-          ? <p className="px-2 text-sm text-muted">ما فيه عمليات في هذه الرحلة.</p>
+          ? <p className="px-2 text-sm text-muted">لا توجد عمليات.</p>
           : <ExpenseGroups expenses={list} categories={categories} />}
       </section>
 
@@ -266,11 +258,10 @@ function TripForm({ trip, onDone }: { trip: Trip; onDone: () => void }) {
   return (
     <form onSubmit={submit} className="space-y-4 pb-2">
       <Field label="اسم الرحلة" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
-      <Field label="ميزانية الرحلة (ر.س) — اختياري" inputMode="decimal" dir="ltr" placeholder="مثال: 15000" value={budget}
-        onChange={(e) => setBudget(e.target.value)} hint="يوصلكم تنبيه عند 80% وعند تجاوزها" />
-      <Field label="بطاقة الرحلة (آخر 4 أرقام) — اختياري" inputMode="numeric" dir="ltr" maxLength={4} placeholder="مثال: 8812" value={card}
-        onChange={(e) => setCard(e.target.value.replace(/\D/g, ''))}
-        hint="مشترياتها من المحلات أثناء الرحلة تُحسب على الرحلة حتى لو ما ذكرت الرسالة الدولة" />
+      <Field label="ميزانية الرحلة (ر.س) — اختياري" inputMode="decimal" dir="ltr" placeholder="15000" value={budget}
+        onChange={(e) => setBudget(e.target.value)} />
+      <Field label="بطاقة الرحلة (آخر 4 أرقام) — اختياري" inputMode="numeric" dir="ltr" maxLength={4} placeholder="8812" value={card}
+        onChange={(e) => setCard(e.target.value.replace(/\D/g, ''))} />
       <Button type="submit" className="w-full" loading={update.isPending}><CheckCircle className="size-5" weight="bold" /> حفظ</Button>
     </form>
   );

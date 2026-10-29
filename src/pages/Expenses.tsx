@@ -151,9 +151,7 @@ export default function Expenses() {
       </div>
 
       {isPending ? <Spinner /> : filtered.length === 0
-        ? <EmptyState icon={hasFilters ? FunnelSimple : Receipt} title={hasFilters ? 'لا توجد نتائج مطابقة' : 'لا توجد عمليات في هذه الفترة'}>
-            {hasFilters ? 'جرّب تغيير كلمات البحث أو التصفية' : 'اضغط زر + لإضافة مصروف'}
-          </EmptyState>
+        ? <EmptyState icon={hasFilters ? FunnelSimple : Receipt} title={hasFilters ? 'لا توجد نتائج مطابقة' : 'لا توجد عمليات في هذه الفترة'} />
         : <ExpenseGroups expenses={filtered} categories={categories} />}
     </div>
   );

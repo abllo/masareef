@@ -81,7 +81,7 @@ export default function Dashboard() {
             <Link to="/settings"
               className="mt-5 flex items-center gap-2 rounded-2xl bg-white/12 px-4 py-3 text-sm font-medium transition active:bg-white/20">
               <Target className="size-5" weight="duotone" />
-              <span className="flex-1">حدّد ميزانية شهرية لمتابعة المتبقي</span>
+              <span className="flex-1">تحديد الميزانية الشهرية</span>
               <CaretLeft className="size-4" weight="bold" />
             </Link>
           ) : (
@@ -105,7 +105,7 @@ export default function Dashboard() {
               </div>
               {budget.dailyAllowance !== null && (
                 <p className="mt-2.5 text-xs text-white/80">
-                  تقدرون تصرفون <span className="num font-semibold text-white">{formatSAR(budget.dailyAllowance)}</span> يومياً حتى آخر الشهر
+                  المتاح يومياً <span className="num font-semibold text-white">{formatSAR(budget.dailyAllowance)}</span>
                 </p>
               )}
             </div>
@@ -123,7 +123,6 @@ export default function Dashboard() {
             <span className="block truncate font-semibold">
               {activeTrip ? `${activeTrip.name} جارية ${activeTrip.countries.map(flag).join(' ')}` : `سفر ${formatMonth(month)}`}
             </span>
-            <span className="text-xs text-muted">منفصلة عن مصروف الشهر وميزانيته</span>
           </span>
           {travelTotal > 0 && <span className="num font-bold">{formatSAR(travelTotal)}</span>}
           <CaretLeft className="size-4 text-muted" weight="bold" />
@@ -163,7 +162,6 @@ export default function Dashboard() {
 
       {expenses.isPending ? <Spinner /> : all.length === 0 ? (
         <EmptyState icon={Receipt} title={`لا توجد مصروفات في ${formatMonth(month)}`}>
-          سجّلوا أول مصروف، وستظهر هنا الإحصائيات والرسوم.
           <div className="mt-4"><Button onClick={() => openSheet()}>إضافة مصروف</Button></div>
         </EmptyState>
       ) : (

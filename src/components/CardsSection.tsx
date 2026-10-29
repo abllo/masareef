@@ -26,19 +26,16 @@ export function CardsSection() {
     <Card className="space-y-4">
       <div>
         <h2 className="inline-flex items-center gap-2 font-bold"><CreditCard className="size-5 text-brand" weight="duotone" />البطاقات والبنوك</h2>
-        <p className="mt-1 text-sm leading-relaxed text-muted">
-          تنضاف تلقائياً من رسائل البنك. العملات الأجنبية تتحول بسعر اليوم + رسوم البطاقة.
-        </p>
       </div>
 
       <form onSubmit={saveFee} className="flex items-end gap-2">
-        <Field label="نسبة رسوم العمليات الأجنبية الافتراضية (%)" hint="للبطاقات اللي ما لها نسبة خاصة، شاملة الضريبة"
+        <Field label="نسبة رسوم العمليات الأجنبية الافتراضية (%)" hint="شاملة الضريبة"
           inputMode="decimal" dir="ltr" className="flex-1" value={fee} onChange={(e) => setFee(e.target.value)} />
         <Button type="submit" variant="secondary" loading={update.isPending}>حفظ</Button>
       </form>
 
       {cards.length === 0 ? (
-        <p className="rounded-xl bg-surface-2 px-3 py-2.5 text-xs text-muted">ما فيه بطاقات بعد.</p>
+        <p className="rounded-xl bg-surface-2 px-3 py-2.5 text-xs text-muted">لا توجد بطاقات.</p>
       ) : (
         <ul className="space-y-2">{cards.map((c) => <CardItem key={c.card_last4} card={c} />)}</ul>
       )}
@@ -92,7 +89,7 @@ function CardItem({ card }: { card: CardRow }) {
       <div className="mt-2 grid gap-2 sm:grid-cols-3">
         <Select label="البنك" showLabel value={bank} onChange={setBank}
           options={[{ value: '', label: 'غير معروف' }, ...Object.entries(BANK_LABELS).map(([k, v]) => ({ value: k, label: v }))]} />
-        <Field label="اسم مختصر (اختياري)" placeholder="مثال: فيزا السفر" maxLength={30} value={nickname} onChange={(e) => setNickname(e.target.value)} />
+        <Field label="اسم مختصر (اختياري)" placeholder="فيزا السفر" maxLength={30} value={nickname} onChange={(e) => setNickname(e.target.value)} />
         <Field label="رسوم أجنبية % (اختياري)" placeholder="الافتراضية" inputMode="decimal" dir="ltr" value={fee} onChange={(e) => setFee(e.target.value)} />
       </div>
       <Button variant="secondary" className="mt-2 h-9 text-sm" onClick={save} loading={saving}>حفظ</Button>
