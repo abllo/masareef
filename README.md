@@ -18,7 +18,7 @@
 
 ### 1. إنشاء مشروع Supabase
 1. أنشئ حساباً مجانياً في [supabase.com](https://supabase.com) ثم مشروعاً جديداً (اختر منطقة قريبة).
-2. افتح **SQL Editor**، والصق محتوى ملفات مجلد `supabase/migrations` **واحداً تلو الآخر بالترتيب** (`0001` ثم `0002` ثم `0003`)، واضغط **Run** بعد كل ملف. الملف `0004` لا تحتاجه في مشروع جديد.
+2. افتح **SQL Editor**، والصق محتوى الملف `supabase/setup_all.sql` كاملاً **مرة واحدة** واضغط **Run** (يجمع `0001` و`0002` و`0003` بالترتيب). الملف `0004` لا تحتاجه في مشروع جديد.
 3. من **Authentication → URL Configuration** ضع في **Site URL** رابط موقعك على GitHub Pages، مثل `https://USERNAME.github.io/REPO/`.
 4. (اختياري) من **Authentication → Providers → Email** يمكنك إيقاف **Confirm email** إذا أردت الدخول مباشرة دون رسالة تأكيد.
 5. من **Project Settings → API** انسخ **Project URL** و **anon public key**.
