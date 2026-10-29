@@ -5704,7 +5704,7 @@ notify pgrst, 'reload schema';
 -- ───────────── 0016_push_simple.sql ─────────────
 -- =====================================================================
 --  0016: إشعار المصروف صار سطر واحد بس
---   «تم إضافة مبلغ 83.78 ر.س من نون إلى مصاريف»
+--   «تم إضافة مبلغ 83.78 ر.س من نون» (iOS يكتب تحته from مصاريف)
 --   - للعائلة نفس السطر واسم اللي أضافه بين قوسين
 --   - بداية الرحلة والخصم المكرر صارت إشعارات مستقلة (تطلع وقتها فقط)
 --   - إشعارات الميزانية باقية مثل ما هي
@@ -5742,7 +5742,7 @@ begin
 
   v_label := coalesce(nullif(btrim(e.sms_meta->>'merchant'), ''),
                       nullif(btrim(regexp_replace(coalesce(e.description, ''), '^[📩🧾]\s*', '')), ''));
-  v_line  := 'تم إضافة مبلغ ' || public.fmt_sar(e.amount) || coalesce(' من ' || v_label, '') || ' إلى مصاريف';
+  v_line  := 'تم إضافة مبلغ ' || public.fmt_sar(e.amount) || coalesce(' من ' || v_label, '');
   select display_name into v_by from household_members where household_id = e.household_id and user_id = e.created_by;
   select monthly_budget into v_budget from households where id = e.household_id;
   v_month := date_trunc('month', e.expense_date)::date;
