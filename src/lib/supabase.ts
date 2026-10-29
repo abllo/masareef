@@ -5,6 +5,7 @@ const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const isConfigured = Boolean(url && key);
 
-export const supabase = createClient(url ?? 'http://localhost', key ?? 'missing-key', {
+// || وليس ??: أسرار GitHub غير المضافة تصل كنص فارغ "" فتنهار الصفحة بدل رسالة الإعداد
+export const supabase = createClient(url || 'http://localhost', key || 'missing-key', {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
 });
