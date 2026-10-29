@@ -1,14 +1,18 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
+import { Link, useParams } from 'react-router';
 import { toast } from 'sonner';
 import {
-  ArrowsClockwise, ChatCircleText, Copy, Key, SignOut, Plus, Tag, Target, UserMinus, UsersThree,
+  AirplaneTilt, ArrowRight, ArrowsClockwise, BellRinging, CaretLeft, ChartBar, ChatCircleText, Copy, CreditCard, Key, Repeat,
+  SignOut, Plus, Sparkle, Tag, Target, UserCircle, UserMinus, UsersThree, type Icon,
 } from '@phosphor-icons/react';
 import { AiPanel } from '../components/AiPanel';
 import { CardsSection } from '../components/CardsSection';
 import { NotificationsCard } from '../components/Notifications';
 import { Button, Card, CategoryIcon, ConfirmButton, Field, IconButton, Sheet, cx } from '../components/ui';
 import { useHousehold, useIsOwner } from '../hooks/household';
-import { useCategories, useDeleteCategory, useInvalidate, useSaveCategory, useUpdateHousehold } from '../hooks/queries';
+import { useAiStatus, useCards, useCategories, useDeleteCategory, useInvalidate, useSaveCategory, useUpdateHousehold } from '../hooks/queries';
+import { usePushStatus } from '../hooks/push';
+import { useAuth } from '../hooks/auth';
 import {
   fetchSmsToken, leaveHousehold, regenerateInviteCode, regenerateSmsToken, removeMember, translateError,
 } from '../lib/api';
@@ -17,34 +21,134 @@ import { formatSAR, parseAmount, toInputValue } from '../lib/money';
 import { SUPABASE_KEY, SUPABASE_URL, supabase } from '../lib/supabase';
 import type { Category } from '../lib/types';
 
+/** أقسام الإعدادات: كل قسم صفحة مستقلة */
+const SECTIONS: Record<string, { title: string; owner?: boolean; render: () => ReactNode }> = {
+  account: { title: 'حسابي', render: () => <><ProfileSection /><PasswordSection /></> },
+  notifications: { title: 'الإشعارات', render: () => <NotificationsCard /> },
+  family: { title: 'العائلة', render: () => <FamilySection /> },
+  budget: { title: 'الميزانية', render: () => <BudgetSection /> },
+  categories: { title: 'التصنيفات', owner: true, render: () => <CategoriesSection /> },
+  cards: { title: 'البطاقات والبنوك', owner: true, render: () => <CardsSection /> },
+  sms: { title: 'رسائل البنك', render: () => <SmsSection /> },
+  ai: { title: 'الذكاء الاصطناعي', render: () => <AiPanel /> },
+};
+
 export default function Settings() {
+  const { section } = useParams();
   const isOwner = useIsOwner();
-  const { members } = useHousehold();
-  const owner = members.find((m) => m.role === 'owner');
+  const s = section ? SECTIONS[section] : undefined;
+  if (!s || (s.owner && !isOwner)) return <SettingsHome />;
+  return (
+    <div className="space-y-4 pt-4">
+      <Link to="/settings" className="inline-flex items-center gap-1 text-sm font-semibold text-muted">
+        <ArrowRight className="size-4" weight="bold" /> الإعدادات
+      </Link>
+      {s.render()}
+    </div>
+  );
+}
+
+function Row({ to, icon: RowIcon, tone, title, value }: { to: string; icon: Icon; tone: string; title: string; value?: ReactNode }) {
+  return (
+    <Link to={to} className="flex items-center gap-3 px-4 py-3 transition active:bg-surface-2">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl text-white" style={{ background: tone }}>
+        <RowIcon className="size-5" weight="fill" />
+      </span>
+      <span className="min-w-0 flex-1 font-medium">{title}</span>
+      {value !== undefined && <span className="max-w-[45%] truncate text-sm text-muted">{value}</span>}
+      <CaretLeft className="size-4 shrink-0 text-muted" weight="bold" />
+    </Link>
+  );
+}
+
+function Group({ title, children }: { title?: string; children: ReactNode }) {
+  return (
+    <section>
+      {title && <h2 className="mb-1.5 px-4 text-xs font-semibold text-muted">{title}</h2>}
+      <div className="divide-y divide-line/70 overflow-hidden rounded-card bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.04)]">{children}</div>
+    </section>
+  );
+}
+
+function SettingsHome() {
+  const { household, me, members } = useHousehold();
+  const { session } = useAuth();
+  const isOwner = useIsOwner();
+  const { data: categories = [] } = useCategories();
+  const { data: cards = [] } = useCards();
+  const { data: ai } = useAiStatus();
+  const { data: push } = usePushStatus();
+  const activeCats = categories.filter((c) => !c.is_archived).length;
+
   return (
     <div className="space-y-5 pt-4">
       <h1 className="text-xl font-bold">الإعدادات</h1>
-      <NotificationsCard />
-      <BudgetSection />
-      <FamilySection />
-      <SmsSection />
-      <AiPanel />
-      {isOwner ? (
-        <>
-          <CardsSection />
-          <CategoriesSection />
-        </>
-      ) : (
-        <p className="rounded-card bg-surface-2 px-5 py-4 text-sm leading-relaxed text-muted">
-          إدارة التصنيفات والبطاقات والميزانية والمصاريف الثابتة لمنشئ العائلة{owner ? ` (${owner.display_name})` : ''}.
-          تقدر تضيف مصاريفك وتعدّلها، وتتحكم بإشعاراتك وكلمة مرورك.
-        </p>
+
+      <Link to="/settings/account" className="flex items-center gap-3 rounded-card bg-surface p-4 shadow-[0_1px_2px_rgb(0_0_0/0.04)]">
+        <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-brand text-2xl font-bold text-brand-ink">
+          {me.display_name.trim().charAt(0)}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-lg font-bold">{me.display_name}</span>
+          <span className="block truncate text-sm text-muted" dir="ltr">{session?.user.email}</span>
+          <span className="mt-1 inline-block rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-semibold text-brand">
+            {isOwner ? 'منشئ العائلة' : 'عضو'} · {household.name}
+          </span>
+        </span>
+        <CaretLeft className="size-4 shrink-0 text-muted" weight="bold" />
+      </Link>
+
+      <Group>
+        <Row to="/settings/notifications" icon={BellRinging} tone="#E11D48" title="الإشعارات"
+          value={push ? (push.devices > 0 ? 'مفعّلة' : 'غير مفعّلة') : undefined} />
+        <Row to="/settings/family" icon={UsersThree} tone="#2563EB" title="العائلة" value={`${members.length} ${members.length > 2 ? 'أفراد' : members.length === 2 ? 'فردين' : 'فرد'}`} />
+        <Row to="/settings/budget" icon={Target} tone="#0E6B58" title="الميزانية الشهرية"
+          value={household.monthly_budget ? formatSAR(household.monthly_budget) : 'غير محددة'} />
+      </Group>
+
+      {isOwner && (
+        <Group title="الإدارة">
+          <Row to="/settings/categories" icon={Tag} tone="#7C3AED" title="التصنيفات" value={`${activeCats}`} />
+          <Row to="/settings/cards" icon={CreditCard} tone="#475569" title="البطاقات والبنوك" value={cards.length ? `${cards.length}` : undefined} />
+          <Row to="/recurring" icon={Repeat} tone="#B45309" title="المصاريف الثابتة" />
+        </Group>
       )}
-      <PasswordSection />
+
+      <Group title="التسجيل التلقائي">
+        <Row to="/settings/sms" icon={ChatCircleText} tone="#16A34A" title="اختصار رسائل البنك" />
+        <Row to="/settings/ai" icon={Sparkle} tone="#C2410C" title="الذكاء الاصطناعي"
+          value={ai ? (ai.enabled ? 'Claude يعمل' : 'غير مفعّل') : undefined} />
+        <Row to="/messages" icon={ChatCircleText} tone="#0891B2" title="سجل رسائل البنك" />
+      </Group>
+
+      <Group title="التقارير">
+        <Row to="/trips" icon={AirplaneTilt} tone="#0284C7" title="الرحلات" />
+        <Row to="/years" icon={ChartBar} tone="#0E6B58" title="المقارنة السنوية" />
+      </Group>
+
       <Button variant="ghost" className="w-full text-danger" onClick={() => supabase.auth.signOut()}>
         <SignOut className="size-5" weight="bold" /> تسجيل الخروج
       </Button>
     </div>
+  );
+}
+
+function ProfileSection() {
+  const { me } = useHousehold();
+  const update = useUpdateHousehold();
+  const [name, setName] = useState(me.display_name);
+  return (
+    <Card>
+      <h2 className="inline-flex items-center gap-2 font-bold"><UserCircle className="size-5 text-brand" weight="duotone" />حسابي</h2>
+      <form className="mt-4 flex items-end gap-2" onSubmit={(e) => {
+        e.preventDefault();
+        if (!name.trim()) return toast.error('الاسم لا يمكن أن يكون فارغاً');
+        update.mutate({ display_name: name.trim() });
+      }}>
+        <Field label="اسمك" className="flex-1" value={name} maxLength={30} onChange={(e) => setName(e.target.value)} />
+        <Button type="submit" variant="secondary" loading={update.isPending}>حفظ</Button>
+      </form>
+    </Card>
   );
 }
 
@@ -75,7 +179,7 @@ function BudgetSection() {
     <Card>
       <h2 className="inline-flex items-center gap-2 font-bold"><Target className="size-5 text-brand" weight="duotone" />الميزانية الشهرية</h2>
       <p className="mt-1 text-sm text-muted">
-        {household.monthly_budget ? `الحالية: ${formatSAR(household.monthly_budget)}` : isOwner ? 'لم تُحدَّد بعد. اتركها فارغة لإلغائها.' : 'لم تُحدَّد بعد.'}
+        {household.monthly_budget ? `الحالية: ${formatSAR(household.monthly_budget)}` : 'غير محددة'}
       </p>
       {isOwner && <form onSubmit={submit} className="mt-4 flex items-end gap-2">
         <Field label="المبلغ (ر.س)" inputMode="decimal" dir="ltr" placeholder="مثال: 12000" className="flex-1"
@@ -90,7 +194,6 @@ function FamilySection() {
   const { household, me, members } = useHousehold();
   const update = useUpdateHousehold();
   const invalidate = useInvalidate();
-  const [name, setName] = useState(me.display_name);
   const [familyName, setFamilyName] = useState(household.name);
   const [rotating, setRotating] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -137,17 +240,16 @@ function FamilySection() {
   return (
     <Card className="space-y-4">
       <h2 className="inline-flex items-center gap-2 font-bold"><UsersThree className="size-5 text-brand" weight="duotone" />العائلة</h2>
-      <form className="space-y-3" onSubmit={(e) => {
-        e.preventDefault();
-        if (!name.trim() || !familyName.trim()) return toast.error('الأسماء لا يمكن أن تكون فارغة');
-        update.mutate({ display_name: name.trim(), name: familyName.trim() });
-      }}>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="اسمك" value={name} maxLength={30} onChange={(e) => setName(e.target.value)} />
-          <Field label="اسم العائلة" value={familyName} maxLength={60} onChange={(e) => setFamilyName(e.target.value)} />
-        </div>
-        <Button type="submit" variant="secondary" loading={update.isPending}>حفظ الأسماء</Button>
-      </form>
+      {isOwner && (
+        <form className="flex items-end gap-2" onSubmit={(e) => {
+          e.preventDefault();
+          if (!familyName.trim()) return toast.error('اسم العائلة لا يمكن أن يكون فارغاً');
+          update.mutate({ name: familyName.trim() });
+        }}>
+          <Field label="اسم العائلة" className="flex-1" value={familyName} maxLength={60} onChange={(e) => setFamilyName(e.target.value)} />
+          <Button type="submit" variant="secondary" loading={update.isPending}>حفظ</Button>
+        </form>
+      )}
 
       <div>
         <p className="mb-2 text-sm font-medium text-muted">الأعضاء</p>
@@ -165,13 +267,10 @@ function FamilySection() {
             </li>
           ))}
         </ul>
-        {isOwner && members.length > 1 && (
-          <p className="mt-2 text-xs text-muted">العضو المُزال يفقد الوصول فوراً، وتبقى عملياته في السجل.</p>
-        )}
       </div>
 
       <div className="rounded-2xl border border-dashed border-line p-4">
-        <p className="text-sm text-muted">شارك هذا الرمز مع زوجتك/زوجك ليسجّل وينضم إلى نفس الحساب العائلي:</p>
+        <p className="text-sm text-muted">رمز الدعوة (يدخله فرد العائلة عند التسجيل)</p>
         <div className="mt-3 flex items-center gap-2">
           <code dir="ltr" className="flex-1 rounded-xl bg-surface-2 py-2.5 text-center text-xl font-bold tracking-[.3em]">
             {household.invite_code}
@@ -185,7 +284,6 @@ function FamilySection() {
             </IconButton>
           )}
         </div>
-        {isOwner && <p className="mt-2 text-xs text-muted">بعد انضمام الجميع جدّد الرمز حتى لا يستخدمه أحد آخر.</p>}
       </div>
 
       {!isOwner && (
@@ -245,16 +343,14 @@ function SmsSection() {
     <Card className="space-y-4">
       <div>
         <h2 className="inline-flex items-center gap-2 font-bold"><ChatCircleText className="size-5 text-brand" weight="duotone" />التسجيل التلقائي من رسائل البنك</h2>
-        <p className="mt-1 text-sm text-muted">
-          اختصار في الآيفون يرسل رسالة الشراء للتطبيق فتُسجَّل تلقائياً وتظهر بعلامة 📩. انسخ القيم الثلاث إلى الاختصار.
-        </p>
+        <p className="mt-1 text-sm text-muted">القيم الثلاث اللي يحتاجها الاختصار في الآيفون.</p>
       </div>
       <CopyRow label="1. الرابط" value={endpoint} copied="تم نسخ الرابط" />
       <CopyRow label="2. المفتاح (apikey)" value={SUPABASE_KEY} copied="تم نسخ المفتاح" />
       {token ? (
         <>
           <CopyRow label="3. رمزك الخاص (token)" value={token} copied="تم نسخ رمزك الخاص" />
-          <p className="text-xs text-danger">رمزك يسجّل مصاريف باسمك في عائلتك، لا تعطه أحداً. إذا تسرّب جدّده من هنا.</p>
+          <p className="text-xs text-danger">رمزك خاص بك، لا تعطه أحداً.</p>
           <ConfirmButton className="h-10 px-4 text-sm" loading={rotating} confirmText="تأكيد: الرمز القديم سيتوقف" onConfirm={rotate}>
             <ArrowsClockwise className="size-4" weight="bold" /> تجديد رمزي
           </ConfirmButton>
@@ -272,14 +368,10 @@ function SmsSection() {
           <li>اضغط السهم الأزرق: <b>الطريقة POST</b>.</li>
           <li><b>الرؤوس (Headers)</b> ← أضف رأساً: المفتاح <code dir="ltr">apikey</code> والقيمة <b>المفتاح</b>.</li>
           <li><b>نص الطلب: JSON</b> ← أضف حقلاً نصياً <code dir="ltr">token</code> وقيمته <b>رمزك الخاص</b>، وحقلاً نصياً <code dir="ltr">message</code> واختر له <b>«مدخل الاختصار»</b> من الشريط فوق الكيبورد.</li>
-          <li>أضف إجراء <b>«إظهار إشعار»</b> واختر فيه <b>«محتويات URL»</b>، وسمِّ الاختصار <b>«تسجيل مصروف»</b>.</li>
-          <li>جرّبه بزر التشغيل: إشعار <b>«تجاهل: رسالة فارغة»</b> يعني أن الإعداد صحيح.</li>
+          <li>سمِّ الاختصار <b>«تسجيل مصروف»</b>.</li>
           <li><b>التحكم التلقائي</b> ← <b>+</b> ← <b>رسالة</b> ← الرسالة تتضمن <b>شراء</b> ← إجراء «تشغيل الاختصار: تسجيل مصروف» بالمدخل <b>إدخال الاختصار</b> ← أطفئ «التأكيد قبل التشغيل».</li>
-          <li>إذا كان بنكك يرسل بالإنجليزي، كرّر الخطوة السابقة بكلمة <b dir="ltr">Purchase</b>.</li>
+          <li>فعّل الإشعارات من الإعدادات ← الإشعارات، عشان يوصلك تأكيد كل عملية.</li>
         </ol>
-        <p className="mt-3 text-xs text-muted">
-          يتجاهل التطبيق رسائل التحقق والإيداع والمرفوضة والملغاة، ولا يكرر الرسالة نفسها، ويربطها بالمصروف الثابت إن كان بنفس المبلغ.
-        </p>
       </details>
     </Card>
   );

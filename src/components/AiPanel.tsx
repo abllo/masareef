@@ -71,10 +71,7 @@ function AiStatusHeader() {
           </span>
         )}
       </div>
-      <p className="mt-1 text-sm leading-relaxed text-muted">
-        يقرأ رسائل البنك: المبلغ، المتجر، التاريخ، البطاقة وطريقة الدفع، ويصنّفها ويتعلّم من تعديلاتكم.
-        إذا تعثّر لأي سبب يكمل التطبيق بالقراءة المحلية تلقائياً، فلا تضيع أي رسالة.
-      </p>
+      <p className="mt-1 text-sm text-muted">يقرأ رسائل البنك ويصنّفها، ولو تعثّر يكمل بالقراءة المحلية.</p>
       {status?.enabled && (
         <p className="mt-2 text-xs text-muted">
           قرأ <span className="num font-semibold text-ink">{status.ai_messages_24h}</span> رسالة آخر 24 ساعة
@@ -93,7 +90,7 @@ function AiStatusHeader() {
       )}
       <Link to="/messages" className="mt-3 flex items-center gap-2 rounded-2xl bg-surface-2 px-4 py-3 text-sm font-medium transition active:opacity-80">
         <ChatCircleText className="size-5 text-brand" weight="duotone" />
-        <span className="flex-1">سجل رسائل البنك ووش صار في كل رسالة</span>
+        <span className="flex-1">سجل رسائل البنك</span>
         <CaretLeft className="size-4 text-muted" weight="bold" />
       </Link>
     </div>
@@ -121,7 +118,7 @@ function SmsTester() {
   return (
     <section className="border-t border-line pt-4">
       <h3 className="font-semibold">جرّب رسالة</h3>
-      <p className="mt-0.5 text-xs text-muted">الصق أي رسالة من بنكك وشوف كيف بيقراها، بدون ما تنسجل.</p>
+      <p className="mt-0.5 text-xs text-muted">بدون ما تنسجل.</p>
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} dir="auto"
         placeholder={'شراء عبر نقاط البيع\nمبلغ: SAR 45.50\nلدى: STARBUCKS'}
         className="mt-2 w-full rounded-2xl border border-line bg-surface p-3 text-base outline-none focus:border-brand focus:ring-4 focus:ring-brand/10" />

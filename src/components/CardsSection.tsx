@@ -27,25 +27,23 @@ export function CardsSection() {
       <div>
         <h2 className="inline-flex items-center gap-2 font-bold"><CreditCard className="size-5 text-brand" weight="duotone" />البطاقات والبنوك</h2>
         <p className="mt-1 text-sm leading-relaxed text-muted">
-          يتعرف التطبيق على بطاقاتكم من رسائل البنك (آخر 4 أرقام) ويتذكر بنكها ونوعها. أي عملية بعملة أجنبية بدون مبلغ بالريال
-          تتحول بسعر صرف اليوم، مضافاً لها نسبة رسوم البطاقة.
+          تنضاف تلقائياً من رسائل البنك. العملات الأجنبية تتحول بسعر اليوم + رسوم البطاقة.
         </p>
       </div>
 
       <form onSubmit={saveFee} className="flex items-end gap-2">
-        <Field label="نسبة رسوم العمليات الأجنبية الافتراضية (%)" hint="تُستخدم للبطاقات اللي ما لها نسبة خاصة. اكتبها شاملة الضريبة، مثلاً 2.75% + 15% ضريبة = 3.16"
+        <Field label="نسبة رسوم العمليات الأجنبية الافتراضية (%)" hint="للبطاقات اللي ما لها نسبة خاصة، شاملة الضريبة"
           inputMode="decimal" dir="ltr" className="flex-1" value={fee} onChange={(e) => setFee(e.target.value)} />
         <Button type="submit" variant="secondary" loading={update.isPending}>حفظ</Button>
       </form>
 
       {cards.length === 0 ? (
-        <p className="rounded-xl bg-surface-2 px-3 py-2.5 text-xs text-muted">ما فيه بطاقات بعد. تظهر هنا تلقائياً مع أول رسالة بنك فيها آخر 4 أرقام.</p>
+        <p className="rounded-xl bg-surface-2 px-3 py-2.5 text-xs text-muted">ما فيه بطاقات بعد.</p>
       ) : (
         <ul className="space-y-2">{cards.map((c) => <CardItem key={c.card_last4} card={c} />)}</ul>
       )}
       <p className="text-xs text-muted">
-        أسعار الصرف من <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener noreferrer" className="underline">ExchangeRate-API</a> وتتحدث يومياً.
-        العملات المربوطة بالريال (دولار، درهم…) بسعر الربط الثابت.
+        أسعار الصرف من <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener noreferrer" className="underline">ExchangeRate-API</a>.
       </p>
     </Card>
   );

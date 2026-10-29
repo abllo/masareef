@@ -3,7 +3,6 @@ import { toast } from 'sonner';
 import { Bell, BellRinging, BellSlash, CheckCircle, PaperPlaneTilt, X } from '@phosphor-icons/react';
 import { usePush } from '../hooks/push';
 import { sendTestPush } from '../lib/api';
-import { isIOS } from '../lib/push';
 import type { NotifyKey } from '../lib/types';
 import { Button, Card, cx } from './ui';
 
@@ -73,16 +72,9 @@ export function NotificationsCard() {
                 <BellSlash className="size-4" weight="bold" /> إيقاف على هذا الجهاز
               </Button>
             </div>
-            {isIOS() && (
-              <p className="rounded-2xl bg-surface-2 px-4 py-3 text-xs leading-relaxed text-muted">
-                بعد ما توصلك التجربة، تقدر تطفي إشعارات الاختصارات المكررة: الإعدادات ← الإشعارات ← Shortcuts ← أطفئ Allow Notifications.
-                التسجيل التلقائي يظل شغال.
-              </p>
-            )}
           </div>
         ) : (
           <div className="space-y-2">
-            <p className="text-sm leading-relaxed text-muted">فعّلها على هذا الجهاز ليوصلك تأكيد كل عملية وتنبيهات الميزانية والمصاريف الثابتة.</p>
             <Button className="w-full" loading={busy === 'on' || push.loading} disabled={!push.ready}
               onClick={() => run('on', push.enable, 'تم تفعيل الإشعارات')}>
               <Bell className="size-5" weight="bold" /> تفعيل الإشعارات على هذا الجهاز
@@ -105,7 +97,6 @@ export function NotificationsCard() {
           ))}
         </ul>
       )}
-      <p className="text-xs text-muted">التفضيلات لك أنت على كل أجهزتك، وكل شخص في العائلة يتحكم بإشعاراته.</p>
     </Card>
   );
 }

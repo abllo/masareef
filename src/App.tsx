@@ -54,6 +54,7 @@ export default function App() {
             <Route path="expenses" element={<Expenses />} />
             <Route path="recurring" element={<RecurringPage />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="settings/:section" element={<Settings />} />
             <Route path="messages" element={<Messages />} />
             <Route path="trips" element={<Trips />} />
             <Route path="trips/:id" element={<Trips />} />
