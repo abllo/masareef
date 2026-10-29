@@ -22,7 +22,7 @@ export const keys = {
 };
 
 /** كل ما يتأثر بتغيير في المصروفات */
-export const EXPENSE_DEPENDENT = ['expenses', 'monthly', 'recurring-payments', 'trips', 'trip-expenses', 'years'];
+export const EXPENSE_DEPENDENT = ['expenses', 'monthly', 'recurring-payments', 'trips', 'trip-expenses', 'years', 'renewals'];
 
 const onError = (e: Error) => toast.error(e.message);
 
@@ -225,4 +225,10 @@ export function useTripActions() {
 export function useYears() {
   const { household } = useHousehold();
   return useQuery({ queryKey: ['years', household.id], queryFn: api.fetchYearsOverview, staleTime: 60_000 });
+}
+
+// ---------- التجديدات ----------
+export function useRenewals() {
+  const { household } = useHousehold();
+  return useQuery({ queryKey: ['renewals', household.id], queryFn: () => api.fetchRenewals(household.id) });
 }

@@ -16,6 +16,7 @@ export function useRealtimeSync(householdId: string) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'recurring_expenses', filter }, () => refresh(['recurring']))
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'households', filter: `id=eq.${householdId}` }, () => refresh(['household']))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'trips', filter }, () => refresh(['trips', 'expenses']))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'renewals', filter }, () => refresh(['renewals']))
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sms_log', filter }, () => refresh(['sms-log', 'ai-status', 'categories', 'cards']))
       // أحداث الحذف في Supabase لا تقبل الفلترة، فنستقبلها بدون فلتر (تحمل المعرّف فقط) ونحدّث
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'expenses' }, () => refresh(EXPENSE_DEPENDENT))

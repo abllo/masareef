@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
-import { AirplaneTilt, ArrowSquareOut, Camera, ChatCircleText, CheckCircle, Receipt as ReceiptIcon, Sparkle, Trash } from '@phosphor-icons/react';
+import { AirplaneTilt, ArrowSquareOut, Camera, ChatCircleText, CheckCircle, Receipt as ReceiptIcon, ShieldCheck, Sparkle, Trash } from '@phosphor-icons/react';
+import { useNavigate } from 'react-router';
 import { useCards, useCategories, useDeleteExpense, useSaveExpense, useTrips } from '../hooks/queries';
 import { countryName, flag } from '../lib/countries';
 import { useCanEdit, useHousehold, useMemberName } from '../hooks/household';
@@ -41,9 +42,10 @@ function SmsDetails({ expense }: { expense: Expense }) {
     <div className="flex items-start gap-2 rounded-2xl bg-surface-2 px-3 py-2.5 text-xs leading-relaxed text-muted">
       <ChatCircleText className="mt-0.5 size-4 shrink-0" weight="duotone" />
       <span className="flex-1">
-        من رسالة البنك{parts.length > 0 && ` · ${parts.join(' · ')}`}
+        {meta.source === 'statement' ? 'من كشف الحساب' : 'من رسالة البنك'}{parts.length > 0 && ` · ${parts.join(' · ')}`}
         <span className="mt-0.5 flex items-center gap-1">
-          {meta.rule ? 'التصنيف من قاعدة تعلّمها التطبيق منكم'
+          {meta.source === 'statement' ? 'استوردها Claude من الكشف'
+            : meta.rule ? 'التصنيف من قاعدة تعلّمها التطبيق منكم'
             : meta.source === 'ai' ? <><Sparkle className="size-3.5" weight="fill" /> قرأها وصنّفها Claude</>
             : 'قراءة محلية (بدون ذكاء اصطناعي)'}
         </span>
@@ -59,6 +61,7 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
   const remove = useDeleteExpense();
   const memberName = useMemberName();
   const canEdit = useCanEdit();
+  const navigate = useNavigate();
   const readOnly = Boolean(expense && !canEdit(expense.created_by));
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -210,6 +213,10 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
       {expense && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
           <span>أضافه {memberName(expense.created_by)}</span>
+          <button type="button" onClick={() => { onDone(); navigate(`/renewals?expense=${expense.id}`); }}
+            className="inline-flex items-center gap-1 font-medium text-brand">
+            <ShieldCheck className="size-4" weight="bold" /> ضمان أو تجديد
+          </button>
           {expense.receipt_path && (
             <button type="button" onClick={toggleReceipt} disabled={loadingReceipt} aria-expanded={Boolean(receiptView)}
               className="inline-flex items-center gap-1 font-medium text-brand disabled:opacity-50">

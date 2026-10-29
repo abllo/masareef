@@ -14,6 +14,7 @@ const KINDS: { key: NotifyKey; title: string; hint: string }[] = [
   { key: 'monthly', title: 'ملخص الشهر والسنة', hint: 'أول كل شهر، وأول السنة' },
   { key: 'sms_issue', title: 'رسالة بنك ما انسجلت', hint: 'عملية مرفوضة، أو رسالة ما انقرأت' },
   { key: 'travel', title: 'الرحلات', hint: 'ميزانية الرحلة، وملخصها لما تنتهي' },
+  { key: 'renewals', title: 'التجديدات والضمانات', hint: 'قبل الموعد بـ 3 أيام ويوم، ويوم الموعد' },
 ];
 
 function Switch({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {

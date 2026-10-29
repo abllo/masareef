@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router';
 import { toast } from 'sonner';
 import {
   AirplaneTilt, ArrowsClockwise, BellRinging, CaretLeft, ChartBar, ChatCircleText, Copy, CreditCard, Key, Repeat,
-  SignOut, Plus, Sparkle, Tag, Target, UserCircle, UserMinus, UsersThree, type Icon,
+  ShieldCheck, SignOut, Plus, Sparkle, Tag, Target, UserCircle, UserMinus, UsersThree, type Icon,
 } from '@phosphor-icons/react';
 import { AiPanel } from '../components/AiPanel';
 import { CardsSection } from '../components/CardsSection';
@@ -119,7 +119,8 @@ function SettingsHome() {
         <Row to="/messages" icon={ChatCircleText} tone="#0891B2" title="سجل رسائل البنك" />
       </Group>
 
-      <Group title="التقارير">
+      <Group title="البيت">
+        <Row to="/renewals" icon={ShieldCheck} tone="#9333EA" title="التجديدات والضمانات" />
         <Row to="/trips" icon={AirplaneTilt} tone="#0284C7" title="الرحلات" />
         <Row to="/years" icon={ChartBar} tone="#0E6B58" title="المقارنة السنوية" />
       </Group>

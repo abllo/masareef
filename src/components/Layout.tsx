@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
 import { NavLink } from 'react-router';
-import { AirplaneTilt, ChartBar, GearSix, House, ListBullets, Plus, Repeat, type Icon } from '@phosphor-icons/react';
+import { AirplaneTilt, ChartBar, GearSix, House, ListBullets, Plus, Repeat, ShieldCheck, type Icon } from '@phosphor-icons/react';
 import { useHousehold } from '../hooks/household';
 import { useRealtimeSync } from '../hooks/realtime';
 import { usePushRefresh } from '../hooks/push';
@@ -26,6 +26,7 @@ const NAV: { to: string; label: string; icon: Icon; end?: boolean }[] = [
 /** روابط إضافية في الشريط الجانبي للكمبيوتر (في الجوال تُفتح من الرئيسية والعمليات) */
 const EXTRA_NAV: typeof NAV = [
   { to: '/trips', label: 'الرحلات', icon: AirplaneTilt },
+  { to: '/renewals', label: 'التجديدات والضمانات', icon: ShieldCheck },
   { to: '/years', label: 'المقارنة السنوية', icon: ChartBar },
 ];
 

@@ -72,7 +72,7 @@ export type PaymentMethod = 'mada' | 'credit_card' | 'apple_pay' | 'online' | 'b
 
 /** تفاصيل قرأها التطبيق من رسالة البنك */
 export interface SmsMeta {
-  source?: 'ai' | 'rules';
+  source?: 'ai' | 'rules' | 'statement';
   merchant?: string;
   card_last4?: string;
   /** شبكة البطاقة */
@@ -197,7 +197,7 @@ export interface MonthlyTotal {
 }
 
 // ---------- الإشعارات ----------
-export type NotifyKey = 'self' | 'family' | 'budget' | 'recurring' | 'monthly' | 'sms_issue' | 'travel';
+export type NotifyKey = 'self' | 'family' | 'budget' | 'recurring' | 'monthly' | 'sms_issue' | 'travel' | 'renewals';
 export type NotifyPrefs = Record<NotifyKey, boolean>;
 export interface PushStatus { prefs: NotifyPrefs; devices: number; public_key: string | null }
 
@@ -244,3 +244,32 @@ export interface YearData {
 }
 export interface YearOverview { year: number; archived: boolean; archived_at?: string; data: YearData }
 export interface ArchiveResult { year: number; deleted: number; total: Halalas; receipts: string[]; receiptsLeft: number }
+
+// ---------- التجديدات والضمانات ----------
+export type RenewalKind = 'insurance' | 'istimara' | 'license' | 'passport' | 'iqama' | 'national_id' | 'warranty'
+  | 'subscription' | 'contract' | 'rent' | 'school' | 'other';
+export interface Renewal {
+  id: string;
+  household_id: string;
+  title: string;
+  kind: RenewalKind;
+  subject: string | null;
+  due_date: ISODate;
+  period_months: number | null;
+  amount: Halalas | null;
+  notes: string | null;
+  source: 'manual' | 'ai' | 'sms' | 'notice';
+  expense_id: string | null;
+  status: 'active' | 'done';
+  created_by: string | null;
+  created_at: string;
+}
+export interface RenewalDraft {
+  kind: RenewalKind;
+  title: string;
+  subject?: string | null;
+  due_date?: string | null;
+  period_months?: number | null;
+  amount_sar?: number | null;
+  confidence?: number;
+}

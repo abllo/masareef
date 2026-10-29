@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { AirplaneTilt, Alarm, CaretLeft, ChartPieSlice, Receipt, Target, TrendDown, TrendUp } from '@phosphor-icons/react';
+import { AirplaneTilt, Alarm, CaretLeft, ChartPieSlice, Receipt, ShieldCheck, Target, TrendDown, TrendUp } from '@phosphor-icons/react';
 import { CategoryDonut, MonthlyBars } from '../components/Charts';
 import { AiReportCard, InsightsCard } from '../components/Insights';
 import { ExpenseRow } from '../components/ExpenseList';
@@ -9,7 +9,8 @@ import { useExpenseSheet } from '../components/Layout';
 import { Logo } from '../components/Logo';
 import { AnimatedAmount, Button, Card, CategoryIcon, EmptyState, MonthSwitcher, SectionTitle, Spinner, cx } from '../components/ui';
 import { useHousehold } from '../hooks/household';
-import { useCategories, useExpenses, useMonthExpenses, useMonthlyTotals, useRecurring, useRecurringPayments, useTrips } from '../hooks/queries';
+import { useCategories, useExpenses, useMonthExpenses, useMonthlyTotals, useRecurring, useRecurringPayments, useRenewals, useTrips } from '../hooks/queries';
+import { KIND_EMOJI, countdown, daysUntil } from '../lib/renewals';
 import { flag } from '../lib/countries';
 import { formatMonth, lastMonths, monthOf, todayISO } from '../lib/dates';
 import { formatSAR, sumHalalas } from '../lib/money';
@@ -37,6 +38,9 @@ export default function Dashboard() {
   const travelTotal = sumHalalas(travel.map((e) => e.amount));
   const { data: trips = [] } = useTrips();
   const activeTrip = trips.find((t) => t.status === 'active');
+  const { data: renewals = [] } = useRenewals();
+  const dueSoon = renewals.filter((r) => r.status === 'active' && daysUntil(r.due_date, today) <= 7)
+    .sort((a, b) => a.due_date.localeCompare(b.due_date));
   const slices = useMemo(() => byCategory(list, categories), [list, categories]);
   const series = monthlySeries(monthly.data ?? [], lastMonths(monthOf(today), 6));
   const previous = sumHalalas(splitTravel(previousExpenses.data ?? []).regular.map((e) => e.amount));
@@ -123,6 +127,23 @@ export default function Dashboard() {
             <span className="text-xs text-muted">منفصلة عن مصروف الشهر وميزانيته</span>
           </span>
           {travelTotal > 0 && <span className="num font-bold">{formatSAR(travelTotal)}</span>}
+          <CaretLeft className="size-4 text-muted" weight="bold" />
+        </Link>
+      )}
+
+      {dueSoon.length > 0 && (
+        <Link to="/renewals"
+          className={cx('flex items-center gap-3 rounded-card px-4 py-3.5 text-sm transition active:opacity-80',
+            daysUntil(dueSoon[0]!.due_date, today) <= 3 ? 'bg-danger-soft' : 'bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.04)]')}>
+          <span className="flex size-10 items-center justify-center rounded-2xl bg-surface text-xl" aria-hidden>
+            {dueSoon.length === 1 ? KIND_EMOJI[dueSoon[0]!.kind] : <ShieldCheck className="size-6 text-brand" weight="duotone" />}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-semibold">
+              {dueSoon.length === 1 ? dueSoon[0]!.title : `${dueSoon.length} تجديدات قريبة`}
+            </span>
+            <span className="text-xs text-muted">{dueSoon.length === 1 ? countdown(daysUntil(dueSoon[0]!.due_date, today)) : dueSoon.map((r) => r.title).join('، ')}</span>
+          </span>
           <CaretLeft className="size-4 text-muted" weight="bold" />
         </Link>
       )}

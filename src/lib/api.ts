@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import type {
   AiStatus, Card, Category, CategoryAudit, CategoryPlan, Expense, Household, ISODate, Member, MerchantRule, MonthKey, MonthlyTotal, MonthReport,
-  ArchiveResult, NotifyPrefs, PlanOp, PlanResult, PushStatus, Recurring, SmsLogEntry, SmsParseResult, Trip, YearOverview,
+  ArchiveResult, NotifyPrefs, PlanOp, PlanResult, PushStatus, Recurring, Renewal, RenewalDraft, SmsLogEntry, SmsParseResult, Trip, YearOverview,
 } from './types';
 
 /** يرمي خطأ مقروءاً بالعربية عند فشل الطلب */
@@ -29,6 +29,7 @@ export function translateError(message: string, code?: string): string {
   if (/year not finished/i.test(message)) return 'تقدر تأرشف السنوات المنتهية فقط';
   if (/confirmation mismatch/i.test(message)) return 'اكتب رقم السنة بالضبط للتأكيد';
   if (/year already archived/i.test(message)) return 'هذه السنة مؤرشفة من قبل';
+  if (/empty text/i.test(message)) return 'اكتب أو الصق النص أولاً';
   if (/invalid subscription/i.test(message)) return 'تعذّر تفعيل الإشعارات على هذا الجهاز';
   if (/year has no expenses/i.test(message)) return 'ما فيه عمليات في هذه السنة';
   if (/no expenses/i.test(message)) return 'ما فيه عمليات في هذا الشهر للتحليل';
@@ -371,3 +372,28 @@ export async function archiveYear(year: number, confirm: string): Promise<Archiv
   }
   return { ...res, receipts: paths, receiptsLeft };
 }
+
+// ---------- التجديدات والضمانات ----------
+export const fetchRenewals = async (householdId: string) =>
+  check(await supabase.from('renewals').select('*').eq('household_id', householdId).order('due_date')) as Renewal[];
+
+export type RenewalInput = Pick<Renewal, 'title' | 'kind' | 'subject' | 'due_date' | 'period_months' | 'amount' | 'notes'>
+  & Partial<Pick<Renewal, 'expense_id' | 'source' | 'status'>>;
+
+export async function saveRenewal(householdId: string, input: RenewalInput, id?: string) {
+  const res = id
+    ? await supabase.from('renewals').update({ ...input, updated_at: new Date().toISOString() }).eq('id', id).select('id')
+    : await supabase.from('renewals').insert({ ...input, household_id: householdId }).select('id');
+  const rows = check(res) as { id: string }[];
+  if (id && rows.length === 0) throw new Error('هذا الإجراء لصاحبه أو لمنشئ العائلة');
+}
+
+export async function deleteRenewal(id: string) {
+  const { error, count } = await supabase.from('renewals').delete({ count: 'exact' }).eq('id', id);
+  if (error) throw new Error(translateError(error.message, error.code));
+  if (count === 0) throw new Error('هذا الإجراء لصاحبه أو لمنشئ العائلة');
+}
+
+export const renewalDone = async (id: string) => check(await supabase.rpc('renewal_done', { p_id: id })) as Renewal;
+
+export const parseRenewal = async (text: string) => check(await supabase.rpc('ai_parse_renewal', { p_text: text })) as RenewalDraft;
