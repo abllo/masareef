@@ -169,9 +169,11 @@ export default function Dashboard() {
           <Card>
             <SectionTitle><span className="inline-flex items-center gap-2"><ChartPieSlice className="size-5 text-brand" weight="duotone" />حسب التصنيف</span></SectionTitle>
             <CategoryDonut slices={slices} total={total} />
-            <ul className="mt-5 space-y-3.5">
+            <ul className="mt-4 space-y-1">
               {slices.map((s) => (
-                <li key={s.categoryId} className="flex items-center gap-3">
+                <li key={s.categoryId}>
+                  <Link to={`/expenses?cat=${s.categoryId}&month=${month}&kind=regular`}
+                    className="-mx-2 flex items-center gap-3 rounded-2xl px-2 py-1.5 transition hover:bg-surface-2 active:bg-surface-2">
                   <CategoryIcon category={s.category} size="sm" />
                   <div className="min-w-0 flex-1">
                     <div className="flex justify-between gap-2 text-sm">
@@ -185,6 +187,7 @@ export default function Dashboard() {
                       <span className="num w-9 text-end text-xs text-muted">{s.percent}%</span>
                     </div>
                   </div>
+                  </Link>
                 </li>
               ))}
             </ul>

@@ -147,15 +147,27 @@ function YearDetails({ year, prev, today }: { year: YearOverview; prev?: YearOve
       <Card>
         <h2 className="mb-1 font-bold">التصنيفات</h2>
         {cmp && <p className="mb-3 text-xs text-muted">التغيّر مقارنة بـ {prev!.year} ({periodLabel(cmp)})</p>}
-        <ul className="space-y-3">
-          {cats.map((c) => (
-            <li key={c.key} className="flex items-center gap-3">
-              <CategoryIcon category={catOf(c)} size="sm" />
-              <span className="min-w-0 flex-1 truncate text-sm font-medium">{c.name}</span>
-              <Change ratio={c.ratio} />
-              <span className="num w-24 text-end text-sm font-semibold">{formatSAR(c.total)}</span>
-            </li>
-          ))}
+        <ul className="space-y-1">
+          {cats.map((c) => {
+            const row = (
+              <>
+                <CategoryIcon category={catOf(c)} size="sm" />
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">{c.name}</span>
+                <Change ratio={c.ratio} />
+                <span className="num w-24 text-end text-sm font-semibold">{formatSAR(c.total)}</span>
+              </>
+            );
+            return (
+              <li key={c.key}>
+                {year.archived ? <div className="flex items-center gap-3 py-1">{row}</div> : (
+                  <Link to={`/expenses?cat=${c.key}&from=${year.year}-01-01&to=${year.year}-12-31&kind=regular`}
+                    className="-mx-2 flex items-center gap-3 rounded-2xl px-2 py-1 transition hover:bg-surface-2 active:bg-surface-2">
+                    {row}
+                  </Link>
+                )}
+              </li>
+            );
+          })}
         </ul>
       </Card>
 

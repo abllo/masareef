@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Link } from 'react-router';
+import { Link, useLocation, useSearchParams } from 'react-router';
 import { AirplaneTilt, Bank, CalendarDots, ChatCircleText, CreditCard, FilePdf, FileXls, FunnelSimple, MagnifyingGlass, Receipt, Tag, User, X } from '@phosphor-icons/react';
 import { ExpenseGroups } from '../components/ExpenseList';
-import { Button, EmptyState, IconButton, MonthSwitcher, Select, Spinner } from '../components/ui';
+import { BackButton, Button, EmptyState, IconButton, MonthSwitcher, Select, Spinner } from '../components/ui';
 import { useHousehold } from '../hooks/household';
 import { useCards, useCategories, useExpenses, useTrips } from '../hooks/queries';
 import { exportExcel, printReport } from '../lib/export';
@@ -12,20 +12,35 @@ import { formatSAR, sumHalalas } from '../lib/money';
 import { expenseBank, expenseCard, filterExpenses } from '../lib/stats';
 import type { MonthKey } from '../lib/types';
 
-export default function Expenses() {
+/** تغيّر الرابط (مثلاً من تصنيف إلى «العمليات» في الشريط السفلي) = تصفية جديدة */
+export default function ExpensesRoute() {
+  const { search } = useLocation();
+  return <Expenses key={search} />;
+}
+
+function Expenses() {
   const today = todayISO();
   const { household, members } = useHousehold();
   const { data: categories = [] } = useCategories();
 
-  const [month, setMonth] = useState<MonthKey>(monthOf(today));
-  const [custom, setCustom] = useState(false);
-  const [range, setRange] = useState({ from: month, to: monthEnd(month) });
+  // فتح الصفحة من تصنيف (الرئيسية، السنوات، قراءات): ?cat=…&month=… أو ?cat=…&from=…&to=…
+  const [params] = useSearchParams();
+  const pMonth = params.get('month');
+  const pFrom = params.get('from');
+  const pTo = params.get('to');
+  const pKind = params.get('kind');
+  const fromCategory = Boolean(params.get('cat'));
+  const isDate = (v: string | null): v is string => Boolean(v && /^\d{4}-\d{2}-\d{2}$/.test(v));
+
+  const [month, setMonth] = useState<MonthKey>(isDate(pMonth) ? monthOf(pMonth) : monthOf(today));
+  const [custom, setCustom] = useState(isDate(pFrom) && isDate(pTo));
+  const [range, setRange] = useState({ from: isDate(pFrom) ? pFrom : month, to: isDate(pTo) ? pTo : monthEnd(month) });
   const [query, setQuery] = useState('');
-  const [categoryId, setCategoryId] = useState('');
+  const [categoryId, setCategoryId] = useState(params.get('cat') ?? '');
   const [memberId, setMemberId] = useState('');
   const [card, setCard] = useState('');
   const [bank, setBank] = useState('');
-  const [kind, setKind] = useState<'' | 'regular' | 'travel'>('');
+  const [kind, setKind] = useState<'' | 'regular' | 'travel'>(pKind === 'regular' || pKind === 'travel' ? pKind : '');
   const { data: cardRows = [] } = useCards();
   const cardMap = useMemo(() => new Map(cardRows.map((c) => [c.card_last4, c])), [cardRows]);
   const [exporting, setExporting] = useState(false);
@@ -72,7 +87,10 @@ export default function Expenses() {
   return (
     <div className="space-y-4 pt-4">
       <header className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-bold">العمليات</h1>
+        <div className="flex items-center gap-2">
+          {fromCategory && <BackButton />}
+          <h1 className="text-xl font-bold">العمليات</h1>
+        </div>
         <div className="flex items-center gap-1">
           <Link to="/trips" aria-label="الرحلات" title="الرحلات"
             className="inline-flex size-10 items-center justify-center rounded-full bg-surface text-muted shadow-sm transition hover:text-ink">

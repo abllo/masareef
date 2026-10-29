@@ -1,7 +1,7 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
-import { AirplaneTilt, CalendarBlank, CheckCircle, CreditCard, PencilSimple, Play, Stop, Trash } from '@phosphor-icons/react';
+import { AirplaneTilt, CalendarBlank, CheckCircle, CreditCard, PencilSimple, Play, Stop, Trash, X } from '@phosphor-icons/react';
 import { ExpenseGroups } from '../components/ExpenseList';
 import { BackButton, Button, Card, CategoryIcon, ConfirmButton, EmptyState, Field, Sheet, Spinner, cx } from '../components/ui';
 import { useIsOwner, useMemberName } from '../hooks/household';
@@ -112,6 +112,8 @@ function TripDetail({ id }: { id: string }) {
   const { data: cardRows = [] } = useCards();
   const actions = useTripActions();
   const [editing, setEditing] = useState(false);
+  const [catFilter, setCatFilter] = useState<string | null>(null);
+  const listRef = useRef<HTMLElement>(null);
   const trip = trips.find((t) => t.id === id);
 
   const cardMap = useMemo(() => new Map(cardRows.map((c) => [c.card_last4, c])), [cardRows]);
@@ -187,11 +189,16 @@ function TripDetail({ id }: { id: string }) {
             <h2 className="mb-3 font-bold">حسب التصنيف</h2>
             <ul className="space-y-2.5">
               {slices.map((s) => (
-                <li key={s.categoryId} className="flex items-center gap-3">
-                  <CategoryIcon category={s.category} size="sm" />
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium">{s.category?.name ?? '—'}</span>
-                  <span className="num text-sm font-semibold">{formatSAR(s.total)}</span>
-                  <span className="num w-9 text-end text-xs text-muted">{s.percent}%</span>
+                <li key={s.categoryId}>
+                  <button type="button"
+                    onClick={() => { setCatFilter(s.categoryId); listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
+                    className={cx('-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-2xl px-2 py-1 text-start transition hover:bg-surface-2 active:bg-surface-2',
+                      catFilter === s.categoryId && 'bg-brand-soft')}>
+                    <CategoryIcon category={s.category} size="sm" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{s.category?.name ?? '—'}</span>
+                    <span className="num text-sm font-semibold">{formatSAR(s.total)}</span>
+                    <span className="num w-9 text-end text-xs text-muted">{s.percent}%</span>
+                  </button>
                 </li>
               ))}
             </ul>
@@ -226,11 +233,19 @@ function TripDetail({ id }: { id: string }) {
         </div>
       )}
 
-      <section>
-        <h2 className="mb-2 px-2 font-bold">العمليات</h2>
+      <section ref={listRef} className="scroll-mt-4">
+        <div className="mb-2 flex items-center justify-between gap-2 px-2">
+          <h2 className="font-bold">العمليات</h2>
+          {catFilter && (
+            <button type="button" onClick={() => setCatFilter(null)}
+              className="inline-flex items-center gap-1 rounded-full bg-brand-soft px-3 py-1 text-sm font-semibold text-brand">
+              {categories.find((c) => c.id === catFilter)?.name ?? 'تصنيف'} <X className="size-3.5" weight="bold" />
+            </button>
+          )}
+        </div>
         {list.length === 0 && !loadingList
           ? <p className="px-2 text-sm text-muted">لا توجد عمليات.</p>
-          : <ExpenseGroups expenses={list} categories={categories} />}
+          : <ExpenseGroups expenses={catFilter ? list.filter((e) => e.category_id === catFilter) : list} categories={categories} />}
       </section>
 
       <Sheet open={editing} onOpenChange={setEditing} title="تعديل الرحلة">

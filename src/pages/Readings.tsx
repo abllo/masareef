@@ -38,7 +38,7 @@ export default function ReadingsPage() {
         <>
           <WhenCard list={inMonth} />
           <RecurringCard list={regular} />
-          <HabitsCard list={inMonth} prev={prevMonth} days={days} categories={categories} />
+          <HabitsCard list={inMonth} prev={prevMonth} days={days} categories={categories} month={month} />
           <UnusualCard list={inMonth} history={history} />
           {inMonth.length > 0 && <InsightsCard list={inMonth} total={total} month={month} today={today} />}
         </>
@@ -133,8 +133,8 @@ function RecurringCard({ list }: { list: Expense[] }) {
   );
 }
 
-function HabitsCard({ list, prev, days, categories }: {
-  list: Expense[]; prev: Expense[]; days: number; categories: Parameters<typeof habits>[2];
+function HabitsCard({ list, prev, days, categories, month }: {
+  list: Expense[]; prev: Expense[]; days: number; categories: Parameters<typeof habits>[2]; month: MonthKey;
 }) {
   const rows = habits(list, prev, categories, days);
   if (rows.length === 0) return null;
@@ -145,7 +145,9 @@ function HabitsCard({ list, prev, days, categories }: {
         {rows.map((h) => {
           const diff = h.prevCount ? h.count - h.prevCount : null;
           return (
-            <li key={h.category.id} className="flex items-center gap-3">
+            <li key={h.category.id}>
+              <Link to={`/expenses?cat=${h.category.id}&month=${month}&kind=regular`}
+                className="-mx-2 flex items-center gap-3 rounded-2xl px-2 py-1 transition hover:bg-surface-2 active:bg-surface-2">
               <CategoryIcon category={h.category} size="sm" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold">{h.category.name}</span>
@@ -156,6 +158,7 @@ function HabitsCard({ list, prev, days, categories }: {
                   {diff > 0 ? `+${diff}` : diff} عن الشهر الماضي
                 </span>
               )}
+              </Link>
             </li>
           );
         })}

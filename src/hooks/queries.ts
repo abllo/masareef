@@ -1,9 +1,17 @@
+import { useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
 import { addMonths, monthEnd } from '../lib/dates';
-import type { ISODate, MonthKey } from '../lib/types';
+import { hideExpense, showExpense, useHiddenExpenses } from '../lib/pendingDelete';
+import type { Expense, ISODate, MonthKey } from '../lib/types';
 import { useHousehold } from './household';
+
+/** يخفي العمليات اللي تنتظر الحذف (مهلة «تراجع») من أي قائمة */
+function useWithoutHidden() {
+  const hidden = useHiddenExpenses();
+  return useCallback((rows: Expense[]) => (hidden.size ? rows.filter((e) => !hidden.has(e.id)) : rows), [hidden]);
+}
 
 export const keys = {
   household: (uid: string) => ['household', uid] as const,
@@ -39,10 +47,12 @@ export function useCategories() {
 
 export function useExpenses(from: ISODate, to: ISODate) {
   const { household } = useHousehold();
+  const select = useWithoutHidden();
   return useQuery({
     queryKey: keys.expenses(household.id, from, to),
     queryFn: () => api.fetchExpenses(household.id, from, to),
     placeholderData: (prev) => prev, // يبقي البيانات السابقة أثناء التنقل بين الأشهر
+    select,
   });
 }
 
@@ -109,6 +119,33 @@ export function useSaveExpense() {
     onSettled: () => invalidate(...EXPENSE_DEPENDENT, 'rules'),
     onError,
   });
+}
+
+/** حذف بالسحب: تختفي العملية فوراً، وتنحذف فعلياً بعد 4 ثوانٍ إلا لو ضغط «تراجع» */
+export function useDeleteWithUndo() {
+  const invalidate = useInvalidate();
+  return (expense: Expense) => {
+    hideExpense(expense.id);
+    let settled = false;
+    const commit = async () => {
+      if (settled) return;
+      settled = true;
+      try {
+        await api.deleteExpense(expense);
+        await invalidate(...EXPENSE_DEPENDENT);
+      } catch (e) {
+        toast.error((e as Error).message);
+      } finally {
+        showExpense(expense.id);
+      }
+    };
+    toast('تم حذف العملية', {
+      duration: 4000,
+      action: { label: 'تراجع', onClick: () => { settled = true; showExpense(expense.id); } },
+      onAutoClose: () => void commit(),
+      onDismiss: () => void commit(),
+    });
+  };
 }
 
 export function useDeleteExpense() {
@@ -195,10 +232,12 @@ export function useTrips() {
 }
 
 export function useTripExpenses(tripId: string | undefined) {
+  const select = useWithoutHidden();
   return useQuery({
     queryKey: keys.tripExpenses(tripId ?? '-'),
     queryFn: () => api.fetchTripExpenses(tripId!),
     enabled: Boolean(tripId),
+    select,
   });
 }
 
