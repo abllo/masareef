@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, system-ui, sans-serif;
+
+  --color-bg: #F3F6F5;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #EAF0EE;
+  --color-ink: #13201D;
+  --color-muted: #5B6B67;
+  --color-line: #DCE4E1;
+  --color-brand: #0E6B58;
+  --color-brand-ink: #FFFFFF;
+  --color-brand-soft: #D6EBE5;
+  --color-warn: #B7791F;
+  --color-warn-soft: #FBEFD5;
+  --color-danger: #C0392B;
+  --color-danger-soft: #F8DEDA;
+  --color-gold: #E2A93B;
+
+  --radius-card: 1.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0D1513;
+    --color-surface: #15201D;
+    --color-surface-2: #1C2A26;
+    --color-ink: #E6EFEC;
+    --color-muted: #93A6A1;
+    --color-line: #26352F;
+    --color-brand: #3FB596;
+    --color-brand-ink: #06231C;
+    --color-brand-soft: #143A31;
+    --color-warn: #E3A73F;
+    --color-warn-soft: #3A2C10;
+    --color-danger: #F07B6E;
+    --color-danger-soft: #3D1A16;
+    color-scheme: dark;
+  }
+}
+
+html, body, #root { min-height: 100%; }
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* بطاقة الملخص الرئيسية */
+.hero {
+  background: radial-gradient(120% 140% at 100% 0%, #18927A 0%, #0E6B58 45%, #0A4A3D 100%);
+  color: #fff;
+}
+
+/* إخفاء شريط التمرير الأفقي في قوائم التصنيفات */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* منع تحديد النص بالضغط المطول داخل التطبيق */
+button, nav { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+
+/* الأرقام بعرض ثابت لتصطف المبالغ */
+.num { font-variant-numeric: tabular-nums; }
+
+:focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; }
+
+input[type="date"]::-webkit-calendar-picker-indicator { opacity: .6; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+/* المساحة الآمنة لأجهزة الآيفون */
+.pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 0.75rem); }
+.pt-safe { padding-top: env(safe-area-inset-top); }
