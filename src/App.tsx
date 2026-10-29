@@ -18,6 +18,7 @@ const RecurringPage = lazy(() => import('./pages/Recurring'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Messages = lazy(() => import('./pages/Messages'));
 const Trips = lazy(() => import('./pages/Trips'));
+const Years = lazy(() => import('./pages/Years'));
 
 export default function App() {
   const { session, loading, recovery, endRecovery } = useAuth();
@@ -56,6 +57,7 @@ export default function App() {
             <Route path="messages" element={<Messages />} />
             <Route path="trips" element={<Trips />} />
             <Route path="trips/:id" element={<Trips />} />
+            <Route path="years" element={<Years />} />
             <Route path="*" element={<Dashboard />} />
           </Routes>
         </Suspense>

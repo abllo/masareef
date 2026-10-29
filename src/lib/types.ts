@@ -217,3 +217,30 @@ export interface Trip {
   created_by: string | null;
   created_at: string;
 }
+
+// ---------- الملخص السنوي ----------
+interface Amount { total: Halalas; count: number }
+export interface YearData {
+  year: number;
+  total: Halalas;
+  count: number;
+  /** مصاريف الشهر العادية (بدون السفر) */
+  regular_total?: Halalas;
+  travel_total?: Halalas;
+  first_date: ISODate | null;
+  last_date: ISODate | null;
+  months: ({ month: number; regular?: Halalas; travel?: Halalas } & Amount)[];
+  categories: ({ id?: string; name: string; icon: string; color: string; months: Halalas[] } & Amount)[];
+  merchants: ({ merchant: string } & Amount)[];
+  banks: ({ bank: string } & Amount)[];
+  cards: ({ card_last4: string; bank: string | null; card_type: string | null; card_kind: string | null } & Amount)[];
+  channels: ({ channel: string } & Amount)[];
+  members: ({ member: string } & Amount)[];
+  foreign: ({ currency: string; original: number } & Amount)[];
+  recurring: { name: string; total: Halalas; months_paid: number }[];
+  largest: { merchant: string; category: string; total: Halalas; date: ISODate }[];
+  from_sms: number;
+  trips?: ({ id: string; name: string; countries: string[]; start_date: ISODate; end_date: ISODate | null; budget: Halalas | null } & Amount)[];
+}
+export interface YearOverview { year: number; archived: boolean; archived_at?: string; data: YearData }
+export interface ArchiveResult { year: number; deleted: number; total: Halalas; receipts: string[]; receiptsLeft: number }

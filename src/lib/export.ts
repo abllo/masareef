@@ -1,7 +1,7 @@
 import { formatDayShort } from './dates';
 import { formatSAR, sumHalalas, toRiyals } from './money';
-import { byCategory } from './stats';
-import type { Category, Expense, Member } from './types';
+import { byCategory, expenseCard } from './stats';
+import type { Card, Category, Expense, Member, Trip } from './types';
 
 export interface ReportInput {
   title: string;
@@ -9,11 +9,15 @@ export interface ReportInput {
   expenses: Expense[];
   categories: Category[];
   members: Member[];
+  /** لتفاصيل إضافية في Excel (البطاقة والرحلة) */
+  cards?: ReadonlyMap<string, Card>;
+  trips?: Trip[];
 }
 
-function rows({ expenses, categories, members }: ReportInput) {
+function rows({ expenses, categories, members, cards, trips }: ReportInput) {
   const cat = new Map(categories.map((c) => [c.id, c.name]));
   const who = new Map(members.map((m) => [m.user_id, m.display_name]));
+  const trip = new Map((trips ?? []).map((t) => [t.id, t.name]));
   return [...expenses]
     .sort((a, b) => a.expense_date.localeCompare(b.expense_date) || a.created_at.localeCompare(b.created_at))
     .map((e) => ({
@@ -22,6 +26,9 @@ function rows({ expenses, categories, members }: ReportInput) {
       description: e.description ?? '',
       amount: e.amount,
       by: who.get(e.created_by) ?? 'عضو سابق',
+      card: expenseCard(e, cards),
+      original: e.sms_meta?.original_currency ? `${e.sms_meta.original_amount} ${e.sms_meta.original_currency}` : '',
+      trip: e.trip_id ? trip.get(e.trip_id) ?? 'رحلة' : '',
     }));
 }
 
@@ -74,6 +81,9 @@ export async function exportExcel(input: ReportInput, filename: string) {
     { header: 'الوصف', key: 'description', width: 34 },
     { header: 'المبلغ', key: 'amount', width: 16, style: { numFmt: money } },
     { header: 'أضافه', key: 'by', width: 14 },
+    { header: 'البطاقة', key: 'card', width: 26 },
+    { header: 'المبلغ الأصلي', key: 'original', width: 16 },
+    { header: 'الرحلة', key: 'trip', width: 20 },
   ];
   const data = rows(input);
   data.forEach((r) => ws.addRow({ ...r, date: new Date(`${r.date}T00:00:00Z`), amount: toRiyals(r.amount) }));

@@ -220,3 +220,9 @@ export function useTripActions() {
     }),
   };
 }
+
+// ---------- السنوات ----------
+export function useYears() {
+  const { household } = useHousehold();
+  return useQuery({ queryKey: ['years', household.id], queryFn: api.fetchYearsOverview, staleTime: 60_000 });
+}

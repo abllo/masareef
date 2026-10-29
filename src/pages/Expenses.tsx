@@ -5,7 +5,7 @@ import { AirplaneTilt, Bank, CalendarDots, ChatCircleText, CreditCard, FilePdf, 
 import { ExpenseGroups } from '../components/ExpenseList';
 import { Button, EmptyState, IconButton, MonthSwitcher, Select, Spinner } from '../components/ui';
 import { useHousehold } from '../hooks/household';
-import { useCards, useCategories, useExpenses } from '../hooks/queries';
+import { useCards, useCategories, useExpenses, useTrips } from '../hooks/queries';
 import { exportExcel, printReport } from '../lib/export';
 import { formatDayShort, formatMonth, monthEnd, monthOf, todayISO } from '../lib/dates';
 import { formatSAR, sumHalalas } from '../lib/money';
@@ -47,7 +47,8 @@ export default function Expenses() {
   const hasFilters = Boolean(query || categoryId || memberId || card || bank || kind);
   const hasTravel = data.some((e) => e.trip_id);
 
-  const report = () => ({ title: `مصاريف ${household.name}`, periodLabel, expenses: filtered, categories, members });
+  const { data: trips = [] } = useTrips();
+  const report = () => ({ title: `مصاريف ${household.name}`, periodLabel, expenses: filtered, categories, members, cards: cardMap, trips });
 
   async function onExcel() {
     setExporting(true);

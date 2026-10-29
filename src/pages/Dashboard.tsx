@@ -174,7 +174,10 @@ export default function Dashboard() {
 
           <div className="space-y-5">
             <Card>
-              <SectionTitle>آخر 6 أشهر</SectionTitle>
+              <SectionTitle action={
+                <Link to="/years" className="inline-flex items-center gap-0.5 text-sm font-semibold text-brand">
+                  المقارنة السنوية <CaretLeft className="size-4" weight="bold" />
+                </Link>}>آخر 6 أشهر</SectionTitle>
               <MonthlyBars data={series} selected={month} onSelect={setMonth} />
             </Card>
             <Card className="p-3">

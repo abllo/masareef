@@ -21,6 +21,13 @@
   --radius-card: 1.5rem;
 }
 
+/* ألوان مقارنة السنوات (مختبرة لعمى الألوان) — خارج @theme حتى لا يحذفها Tailwind */
+:root {
+  --color-y1: #2a78d6;
+  --color-y2: #eb6834;
+  --color-y3: #1baf7a;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --color-bg: #0D1513;
@@ -36,6 +43,9 @@
     --color-warn-soft: #3A2C10;
     --color-danger: #F07B6E;
     --color-danger-soft: #3D1A16;
+    --color-y1: #3987e5;
+    --color-y2: #d95926;
+    --color-y3: #199e70;
     color-scheme: dark;
   }
 }

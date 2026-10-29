@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import type {
   AiStatus, Card, Category, CategoryAudit, CategoryPlan, Expense, Household, ISODate, Member, MerchantRule, MonthKey, MonthlyTotal, MonthReport,
-  NotifyPrefs, PlanOp, PlanResult, PushStatus, Recurring, SmsLogEntry, SmsParseResult, Trip,
+  ArchiveResult, NotifyPrefs, PlanOp, PlanResult, PushStatus, Recurring, SmsLogEntry, SmsParseResult, Trip, YearOverview,
 } from './types';
 
 /** يرمي خطأ مقروءاً بالعربية عند فشل الطلب */
@@ -30,6 +30,7 @@ export function translateError(message: string, code?: string): string {
   if (/confirmation mismatch/i.test(message)) return 'اكتب رقم السنة بالضبط للتأكيد';
   if (/year already archived/i.test(message)) return 'هذه السنة مؤرشفة من قبل';
   if (/invalid subscription/i.test(message)) return 'تعذّر تفعيل الإشعارات على هذا الجهاز';
+  if (/year has no expenses/i.test(message)) return 'ما فيه عمليات في هذه السنة';
   if (/no expenses/i.test(message)) return 'ما فيه عمليات في هذا الشهر للتحليل';
   if (/statement timeout|canceling statement/i.test(message)) return 'أخذ وقتاً أطول من المتوقع، جرّب مرة ثانية';
   if (/same_password|different from the old/i.test(message)) return 'كلمة المرور الجديدة مطابقة للقديمة';
@@ -338,4 +339,35 @@ export async function deleteTrip(id: string) {
   const { error, count } = await supabase.from('trips').delete({ count: 'exact' }).eq('id', id);
   if (error) throw new Error(translateError(error.message, error.code));
   if (count === 0) throw new Error('هذا الإجراء لمنشئ العائلة فقط');
+}
+
+// ---------- السنوات والأرشفة ----------
+export const fetchYearsOverview = async () => check(await supabase.rpc('years_overview')) as YearOverview[];
+
+/** كل عمليات فترة (على دفعات، بدون حد 1000 صف) */
+export async function fetchAllExpenses(householdId: string, from: ISODate, to: ISODate): Promise<Expense[]> {
+  const out: Expense[] = [];
+  for (let page = 0; ; page++) {
+    const rows = check(
+      await supabase.from('expenses').select(EXPENSE_COLUMNS).eq('household_id', householdId)
+        .gte('expense_date', from).lte('expense_date', to)
+        .order('expense_date').order('created_at').order('id')
+        .range(page * 1000, page * 1000 + 999),
+    ) as Expense[];
+    out.push(...rows);
+    if (rows.length < 1000) return out;
+  }
+}
+
+/** يأرشف سنة منتهية: يحفظ ملخصها ثم يحذف عملياتها، ثم يحذف صور فواتيرها من التخزين */
+export async function archiveYear(year: number, confirm: string): Promise<ArchiveResult> {
+  const res = check(await supabase.rpc('archive_year', { p_year: year, p_confirm: confirm })) as Omit<ArchiveResult, 'receiptsLeft'>;
+  let receiptsLeft = 0;
+  const paths = res.receipts ?? [];
+  for (let i = 0; i < paths.length; i += 100) {
+    const chunk = paths.slice(i, i + 100);
+    const { error } = await supabase.storage.from('receipts').remove(chunk);
+    if (error) receiptsLeft += chunk.length;
+  }
+  return { ...res, receipts: paths, receiptsLeft };
 }
