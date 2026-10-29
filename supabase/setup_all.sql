@@ -486,7 +486,9 @@ declare
   v_id      uuid;
   v_linked  text;
 begin
-  select * into t from sms_tokens s where s.token = sms_expense.token;
+  -- الرمز 64 حرفاً hex: نتجاهل أي مسافة أو سطر جديد أو حروف كبيرة دخلت مع اللصق في الاختصار
+  select * into t from sms_tokens s
+  where s.token = lower(regexp_replace(coalesce(sms_expense.token, ''), '[^0-9A-Fa-f]', '', 'g'));
   if t.user_id is null
      or not exists (select 1 from household_members hm
                     where hm.user_id = t.user_id and hm.household_id = t.household_id) then
