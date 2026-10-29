@@ -1,6 +1,6 @@
 -- =====================================================================
 --  ملف الإعداد الكامل لقاعدة البيانات (مشروع Supabase جديد)
---  = 0001 + 0002 + 0003 + 0005 + 0006 بالترتيب (0004 غير مطلوب لقاعدة جديدة)
+--  = 0001 + 0002 + 0003 + 0005 + 0006 + 0007 بالترتيب (0004 غير مطلوب لقاعدة جديدة)
 --  الصق الملف كله مرة وحدة في SQL Editor واضغط Run
 --  (لا تشغّله مرة ثانية على قاعدة فيها بيانات)
 -- =====================================================================
@@ -744,6 +744,8 @@ create extension if not exists http with schema extensions;
 alter table public.expenses   add column if not exists merchant_key text;
 alter table public.expenses   add column if not exists sms_meta jsonb;
 alter table public.categories add column if not exists created_by_ai boolean not null default false;
+-- التصنيفات الأساسية مثبّتة: لا يدمجها الذكاء الاصطناعي ولا يؤرشفها ولا يحذفها ولا يغيّر اسمها
+alter table public.categories add column if not exists is_core boolean not null default false;
 create index if not exists expenses_merchant_idx on public.expenses (household_id, merchant_key) where merchant_key is not null;
 
 -- ---------- قواعد «متجر ← تصنيف» المتعلَّمة ----------
@@ -823,7 +825,7 @@ create or replace function public.normalize_merchant(p text)
 returns text language sql immutable as $$
   select nullif(array_to_string(array(
     select w from regexp_split_to_table(
-      regexp_replace(lower(translate(coalesce(p, ''), 'أإآةى', 'ااايه')), '[^a-zء-ي]+', ' ', 'g'), ' ') as w
+      regexp_replace(lower(translate(coalesce(p, ''), 'أإآةى', 'اااهي')), '[^a-zء-ي]+', ' ', 'g'), ' ') as w
     where length(w) > 1
       and w <> all (array[
         'sa','ksa','sau','saudi','arabia','jeddah','jiddah','riyadh','dammam','khobar','makkah','mecca','madinah','medina',
@@ -850,7 +852,7 @@ begin
   begin
     select decrypted_secret into v from vault.decrypted_secrets where name = 'anthropic_model_' || p_purpose limit 1;
   exception when others then v := null; end;
-  return coalesce(nullif(v, ''), case p_purpose when 'plan' then 'claude-sonnet-5-5' else 'claude-haiku-5-5' end);
+  return coalesce(nullif(v, ''), case p_purpose when 'sms' then 'claude-haiku-5-5' else 'claude-sonnet-5-5' end);
 end $$;
 
 create or replace function public.ai_enabled()
@@ -875,7 +877,7 @@ begin
   exception when others then v_key := null; end;
   if coalesce(v_key, '') = '' then return null; end if;
 
-  perform extensions.http_set_curlopt('CURLOPT_TIMEOUT_MS', case p_purpose when 'plan' then '55000' else '20000' end);
+  perform extensions.http_set_curlopt('CURLOPT_TIMEOUT_MS', case p_purpose when 'sms' then '20000' else '55000' end);
   select * into v_res from extensions.http((
     'POST',
     'https://api.anthropic.com/v1/messages',
@@ -922,8 +924,8 @@ $$;
 create or replace function public.normalize_category(p text)
 returns text language sql immutable as $$
   select array_to_string(array(
-    select regexp_replace(w, '^(وال|ال)', '')
-    from regexp_split_to_table(regexp_replace(lower(translate(coalesce(p, ''), 'أإآةى', 'ااايه')), '[^a-zء-ي]+', ' ', 'g'), ' ') w
+    select regexp_replace(w, '^(وال|ال|و)', '')
+    from regexp_split_to_table(regexp_replace(lower(translate(coalesce(p, ''), 'أإآةى', 'اااهي')), '[^a-zء-ي]+', ' ', 'g'), ' ') w
     where w not in ('', 'و')
   ), ' ')
 $$;
@@ -945,8 +947,9 @@ begin
   select id into v_id from categories
   where household_id = p_household and not is_archived
     and (public.normalize_category(name) = v_norm
-         or public.normalize_category(name) like '%' || v_norm || '%'
-         or v_norm like '%' || public.normalize_category(name) || '%')
+         or (length(v_norm) >= 4 and length(public.normalize_category(name)) >= 4
+             and (public.normalize_category(name) like '%' || v_norm || '%'
+                  or v_norm like '%' || public.normalize_category(name) || '%')))
   order by sort_order limit 1;
   if v_id is not null then return v_id; end if;
   -- يوجد مؤرشف بنفس الاسم: لا نعيد إنشاءه (أرشفته كانت مقصودة)
@@ -1042,11 +1045,13 @@ begin
     when hay ~ '(amazon|امازون|أمازون|noon\.com|\mnoon\M|نون|shein|شي ان|ikea|ايكيا|\mextra\M|اكسترا|jarir|جرير|centrepoint|سنتربوينت|namshi|نمشي|trendyol|ترينديول)' then 'التسوق والمشتريات'
     when hay ~ '(\mstc\M|mobily|موبايلي|\mzain\M|كهرباء|electric|\msec\M|المياه|netflix|نتفلكس|shahid|شاهد|spotify|سبوتيفاي|apple\.com|icloud|سداد|sadad|فاتورة|\mosn\M|youtube|anghami|أنغامي|disney|starzplay|chatgpt|openai)' then 'الفواتير والاشتراكات'
     when hay ~ '(بنزين|وقود|fuel|petrol|sasco|ساسكو|aldrees|الدريس|petromin|بترومين|نفط|محطة|مغسلة|car wash|ورشة|قطع غيار|إطارات|اطارات|tyres|tires)' then 'مصاريف السيارة'
+    when hay ~ '(صيدلي|pharma|nahdi|النهدي|الدواء|dawaa|whites|وايتس|مستشفى|hospital|clinic|عيادة|عيادات|مستوصف|medical|طبي|مختبر|\mlab\M|dental|اسنان|أسنان|بصريات|optic)' then 'الصحة والصيدليات'
     else 'مصاريف أخرى'
   end;
   cat_icon := case cat_name
     when 'تطبيقات التوصيل' then 'bike' when 'المطاعم والمقاهي' then 'food' when 'البقالة والسوبرماركت' then 'cart'
     when 'التسوق والمشتريات' then 'bag' when 'الفواتير والاشتراكات' then 'receipt' when 'مصاريف السيارة' then 'car'
+    when 'الصحة والصيدليات' then 'health'
     else 'circle' end;
 
   -- ---------- Claude (إن كان مفعّلاً، وبحد 60 رسالة في الساعة للعائلة) ----------
@@ -1072,11 +1077,14 @@ Amounts:
 
 merchant: the clean shop/brand name a person would write, without branch numbers, city, country or terminal codes ("STARBUCKS 1234 JEDDAH SA" → "Starbucks", "HUNGERSTATION RIYADH" → "HungerStation", "مطعم البيك فرع ٣" → "البيك"). Keep Arabic names in Arabic.
 
-category: exactly one of the family's categories (the enum). For a merchant listed under "Learned", always use the learned category. Saudi hints: HungerStation, Jahez, Mrsool, ToYou, Keeta, The Chefz, Ninja → delivery apps; Panda, Danube, Othaim, Carrefour, Tamimi, Lulu, Nesto, Farm, Bin Dawood → groceries; cafes, restaurants, bakeries, sweets → restaurants & cafes; STC, Mobily, Zain, SEC electricity, National Water, Netflix, Shahid, Spotify, Apple, Google, iCloud → bills & subscriptions; Aldrees, SASCO, Petromin, Naft, car wash, workshops, tyres → car; Amazon, Noon, Shein, IKEA, Jarir, Extra, Namshi, Centrepoint → shopping; Nahdi, Al-Dawaa, pharmacies, clinics, hospitals → health if such a category exists.
+category: exactly one of the family's categories (the enum). For a merchant listed under "Learned", always use the learned category. Saudi hints: HungerStation, Jahez, Mrsool, ToYou, Keeta, The Chefz, Ninja → delivery apps; Panda, Danube, Othaim, Carrefour, Tamimi, Lulu, Nesto, Farm, Bin Dawood → groceries; cafes, restaurants, bakeries, sweets → restaurants & cafes; STC, Mobily, Zain, SEC electricity, National Water, Netflix, Shahid, Spotify, Apple, Google, iCloud → bills & subscriptions; Aldrees, SASCO, Petromin, Naft, car wash, workshops, tyres → car; Amazon, Noon, Shein, IKEA, Jarir, Extra, Namshi, Centrepoint → shopping; Nahdi, Al-Dawaa, Whites, pharmacies, clinics, hospitals, labs, dentists, opticians → health.
 Use "__new__" ONLY when the purchase clearly belongs to a common spending area that none of the categories covers (for example health & pharmacies, education, travel, kids) — never for a single merchant and never for a near-duplicate of an existing category. Then fill new_category with a short Arabic name (2–3 words) and an icon from its enum. When unsure, use the family's "other" category.
 
 date: the transaction date as YYYY-MM-DD if the message states it (Gregorian), else null.
-card_last4: last 4 digits of the card if shown. payment_method: mada, credit_card, apple_pay, online, bill_payment or other.
+card_last4: last 4 digits of the card if shown.
+card_type: the card network/scheme — mada (Saudi debit network, often written مدى or mada), visa, mastercard, amex, or other; null if unknown.
+card_kind: debit or credit (ائتمانية/credit = credit; مدى and "حساب" are debit); null if unknown.
+channel: how it was paid — apple_pay (Apple Pay / ابل باي / Apple Wallet), pos (in-store POS / نقاط البيع), online (إنترنت / online / e-commerce), bill_payment (سداد), or other.
 confidence: 0 to 1.$sys$,
       format(E'Today: %s (Asia/Riyadh)\n"Other" category: %s\nLearned (merchant ← category):\n%s\n\nMessage:\n<<<\n%s\n>>>',
              v_today, coalesce(v_other, '-'), coalesce(v_learned, '- (none yet)'), public.sms_mask(msg)),
@@ -1099,8 +1107,11 @@ confidence: 0 to 1.$sys$,
                                    'required', jsonb_build_array('name', 'icon')),
             'date',              jsonb_build_object('type', jsonb_build_array('string', 'null')),
             'card_last4',        jsonb_build_object('type', jsonb_build_array('string', 'null')),
-            'payment_method',    jsonb_build_object('type', jsonb_build_array('string', 'null'),
-                                   'enum', jsonb_build_array('mada', 'credit_card', 'apple_pay', 'online', 'bill_payment', 'other', null)),
+            'card_type',         jsonb_build_object('type', jsonb_build_array('string', 'null'),
+                                   'enum', jsonb_build_array('mada', 'visa', 'mastercard', 'amex', 'other', null)),
+            'card_kind',         jsonb_build_object('type', jsonb_build_array('string', 'null'), 'enum', jsonb_build_array('debit', 'credit', null)),
+            'channel',           jsonb_build_object('type', jsonb_build_array('string', 'null'),
+                                   'enum', jsonb_build_array('apple_pay', 'pos', 'online', 'bill_payment', 'other', null)),
             'confidence',        jsonb_build_object('type', 'number')),
           'required', jsonb_build_array('is_purchase', 'category', 'confidence'))),
       500);
@@ -1138,7 +1149,9 @@ confidence: 0 to 1.$sys$,
     end if;
     v_meta := v_meta || jsonb_strip_nulls(jsonb_build_object(
       'card_last4', nullif(right(regexp_replace(coalesce(v_ai->>'card_last4', ''), '[^0-9]', '', 'g'), 4), ''),
-      'payment_method', v_ai->>'payment_method',
+      'card_type', v_ai->>'card_type',
+      'card_kind', case when v_ai->>'card_type' = 'mada' then 'debit' else v_ai->>'card_kind' end,
+      'channel', v_ai->>'channel',
       'confidence', v_ai->'confidence',
       'original_amount', v_ai->'original_amount',
       'original_currency', v_ai->>'original_currency'));
@@ -1186,7 +1199,9 @@ confidence: 0 to 1.$sys$,
     select c.id, c.name into v_cat_id, v_cat_name
     from categories c
     where c.household_id = p_household and not c.is_archived
-    order by (c.name = cat_name) desc, (c.icon = coalesce(cat_icon, '-')) desc, (c.icon = 'circle') desc, c.sort_order desc
+    order by (c.name = cat_name) desc,
+             (public.normalize_category(c.name) = public.normalize_category(cat_name)) desc,
+             (c.icon = coalesce(cat_icon, '-')) desc, (c.icon = 'circle') desc, c.sort_order desc
     limit 1;
   end if;
   if v_cat_id is null and not (v_meta ? 'new_category') then
@@ -1372,7 +1387,7 @@ returns jsonb language sql stable security definer set search_path = public as $
   select jsonb_build_object(
     'categories', coalesce((
       select jsonb_agg(jsonb_build_object(
-        'name', c.name, 'icon', c.icon, 'archived', c.is_archived, 'is_other', c.icon = 'circle',
+        'name', c.name, 'icon', c.icon, 'archived', c.is_archived, 'is_other', c.icon = 'circle', 'is_core', c.is_core,
         'created_by_ai', c.created_by_ai,
         'expenses_total', (select count(*) from exp where exp.category_id = c.id),
         'expenses_90d', (select count(*) from exp where exp.category_id = c.id and exp.expense_date > current_date - 90),
@@ -1411,7 +1426,7 @@ Propose only changes that clearly help; an empty list of operations is a valid a
 - rename (from → new_name): only for unclear or awkward names.
 - archive (from): family-created categories with no expenses in 90 days and no recurring expenses.
 - delete (from): only categories with expenses_total = 0 and recurring = 0.
-Never merge, rename, archive or delete the "other" category (is_other = true). Use the exact existing names. Write summary and reasons in short Arabic.$sys$,
+Core categories (is_core = true) are pinned: never merge them away, rename, archive or delete them — but you may merge other categories INTO them and move merchants into or out of them. Never merge, rename, archive or delete the "other" category (is_other = true). Use the exact existing names. Write summary and reasons in short Arabic.$sys$,
     'Data:' || E'\n' || public.category_stats(v_h)::text,
     jsonb_build_object(
       'name', 'category_plan',
@@ -1465,7 +1480,7 @@ begin
       if v_new is null then v_skipped := v_skipped || jsonb_build_array(op || '{"why":"اسم مكرر أو غير صالح أو وصلنا الحد"}'); continue; end if;
 
     when 'rename' then
-      if v_from.id is null or v_from.icon = 'circle' or coalesce(btrim(op->>'new_name'), '') = ''
+      if v_from.id is null or v_from.icon = 'circle' or v_from.is_core or coalesce(btrim(op->>'new_name'), '') = ''
          or exists (select 1 from categories where household_id = v_h and public.normalize_category(name) = public.normalize_category(op->>'new_name') and id <> v_from.id) then
         v_skipped := v_skipped || jsonb_build_array(op || '{"why":"غير مسموح أو الاسم مستخدم"}'); continue;
       end if;
@@ -1474,8 +1489,8 @@ begin
       values (v_h, v_batch, 'rename', jsonb_build_object('id', v_from.id, 'old_name', v_from.name, 'new_name', btrim(op->>'new_name')), v_actor);
 
     when 'merge' then
-      if v_from.id is null or v_into.id is null or v_from.id = v_into.id or v_from.icon = 'circle' or v_into.is_archived then
-        v_skipped := v_skipped || jsonb_build_array(op || '{"why":"غير مسموح"}'); continue;
+      if v_from.id is null or v_into.id is null or v_from.id = v_into.id or v_from.icon = 'circle' or v_from.is_core or v_into.is_archived then
+        v_skipped := v_skipped || jsonb_build_array(op || '{"why":"غير مسموح (تصنيف أساسي أو غير موجود)"}'); continue;
       end if;
       select coalesce(array_agg(id), '{}') into v_ids from expenses where category_id = v_from.id;
       select coalesce(array_agg(id), '{}') into v_rec from recurring_expenses where category_id = v_from.id;
@@ -1489,16 +1504,18 @@ begin
               'expense_ids', to_jsonb(v_ids), 'recurring_ids', to_jsonb(v_rec), 'rule_keys', v_rules, 'from_was_archived', v_from.is_archived), v_actor);
 
     when 'archive' then
-      if v_from.id is null or v_from.icon = 'circle' or v_from.is_archived then
-        v_skipped := v_skipped || jsonb_build_array(op || '{"why":"غير مسموح"}'); continue;
+      if v_from.id is null or v_from.icon = 'circle' or v_from.is_core or v_from.is_archived then
+        v_skipped := v_skipped || jsonb_build_array(op || '{"why":"غير مسموح (تصنيف أساسي أو غير موجود)"}'); continue;
       end if;
       update categories set is_archived = true where id = v_from.id;
       insert into category_audit (household_id, batch_id, op, details, actor)
       values (v_h, v_batch, 'archive', jsonb_build_object('id', v_from.id, 'name', v_from.name), v_actor);
 
     when 'delete' then
-      if v_from.id is null or v_from.icon = 'circle'
-         or exists (select 1 from expenses where category_id = v_from.id)
+      if v_from.id is null or v_from.icon = 'circle' or v_from.is_core then
+        v_skipped := v_skipped || jsonb_build_array(op || '{"why":"تصنيف أساسي مثبّت"}'); continue;
+      end if;
+      if exists (select 1 from expenses where category_id = v_from.id)
          or exists (select 1 from recurring_expenses where category_id = v_from.id) then
         v_skipped := v_skipped || jsonb_build_array(op || '{"why":"عليه عمليات، يمكن أرشفته فقط"}'); continue;
       end if;
@@ -1628,6 +1645,239 @@ grant execute on function public.ai_category_plan()            to authenticated;
 grant execute on function public.apply_category_plan(jsonb, text) to authenticated;
 grant execute on function public.undo_category_batch(uuid)     to authenticated;
 grant execute on function public.my_household()                to authenticated;
+
+notify pgrst, 'reload schema';
+
+
+-- ───────────── 0007_core_and_reports.sql ─────────────
+-- =====================================================================
+--  0007: التصنيفات الأساسية المثبّتة + تصنيف الصحة + تقرير الشهر بالذكاء الاصطناعي
+-- =====================================================================
+
+-- ---------- إعادة حساب مفاتيح المتاجر بعد تصحيح توحيد الحروف (ة/ى) ----------
+update public.expenses
+   set merchant_key = public.normalize_merchant(coalesce(nullif(sms_meta->>'merchant', ''), regexp_replace(coalesce(description, ''), '^📩\s*', '')))
+ where merchant_key is not null;
+do $$
+declare r record;
+begin
+  for r in select * from public.merchant_rules loop
+    if public.normalize_merchant(r.merchant_label) is distinct from r.merchant_key then
+      begin
+        update public.merchant_rules set merchant_key = public.normalize_merchant(r.merchant_label)
+        where household_id = r.household_id and merchant_key = r.merchant_key;
+      exception when unique_violation then
+        delete from public.merchant_rules where household_id = r.household_id and merchant_key = r.merchant_key;
+      end;
+    end if;
+  end loop;
+end $$;
+
+-- ---------- التصنيفات الأساسية ----------
+update public.categories set is_core = true
+where name in ('البقالة والسوبرماركت', 'المطاعم والمقاهي', 'تطبيقات التوصيل', 'الفواتير والاشتراكات',
+               'التسوق والمشتريات', 'مصاريف السيارة', 'راتب العاملة المنزلية', 'راتب السائق', 'مصاريف أخرى',
+               'الصحة والصيدليات');
+
+-- تصنيف الصحة للعائلات الحالية (قبل «مصاريف أخرى»)
+do $$
+declare h record; v_other int;
+begin
+  for h in select id from public.households loop
+    if not exists (select 1 from public.categories c where c.household_id = h.id
+                   and public.normalize_category(c.name) in ('صحه صيدليات', 'صحه', 'صيدليات', 'صحيه')) then
+      select sort_order into v_other from public.categories where household_id = h.id and icon = 'circle' order by sort_order desc limit 1;
+      update public.categories set sort_order = sort_order + 1 where household_id = h.id and sort_order >= coalesce(v_other, 999);
+      insert into public.categories (household_id, name, icon, color, sort_order, is_core)
+      values (h.id, 'الصحة والصيدليات', 'health', '#DC2626', coalesce(v_other, 10), true);
+    else
+      update public.categories set is_core = true where household_id = h.id
+        and public.normalize_category(name) in ('صحه صيدليات', 'صحه', 'صيدليات', 'صحيه');
+    end if;
+  end loop;
+end $$;
+
+-- العائلات الجديدة: نفس التصنيفات الأساسية مثبّتة
+create or replace function public.create_household(p_name text, p_display_name text)
+returns uuid
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_id  uuid;
+begin
+  if v_uid is null then raise exception 'not authenticated'; end if;
+  if exists (select 1 from household_members where user_id = v_uid) then
+    raise exception 'already in a household';
+  end if;
+
+  insert into households (name) values (coalesce(nullif(trim(p_name), ''), 'عائلتي')) returning id into v_id;
+  insert into household_members (household_id, user_id, display_name, role)
+    values (v_id, v_uid, trim(p_display_name), 'owner');
+
+  insert into categories (household_id, name, icon, color, sort_order, is_core) values
+    (v_id, 'البقالة والسوبرماركت', 'cart',     '#0E6B58', 1,  true),
+    (v_id, 'المطاعم والمقاهي',     'food',     '#C2410C', 2,  true),
+    (v_id, 'تطبيقات التوصيل',      'bike',     '#DB2777', 3,  true),
+    (v_id, 'الفواتير والاشتراكات', 'receipt',  '#2563EB', 4,  true),
+    (v_id, 'التسوق والمشتريات',    'bag',      '#7C3AED', 5,  true),
+    (v_id, 'مصاريف السيارة',       'car',      '#475569', 6,  true),
+    (v_id, 'الصحة والصيدليات',     'health',   '#DC2626', 7,  true),
+    (v_id, 'راتب العاملة المنزلية','broom',    '#B45309', 8,  true),
+    (v_id, 'راتب السائق',          'steering', '#0891B2', 9,  true),
+    (v_id, 'مصاريف أخرى',          'circle',   '#64748B', 10, true);
+  return v_id;
+end $$;
+revoke execute on function public.create_household(text, text) from anon, public;
+grant  execute on function public.create_household(text, text) to authenticated;
+
+-- التصنيف الأساسي لا يُحذف حتى يدوياً (يمكن تغيير اسمه أو لونه فقط)
+create or replace function public.protect_core_category()
+returns trigger language plpgsql as $$
+begin
+  if old.is_core then raise exception 'core category'; end if;
+  return old;
+end $$;
+drop trigger if exists categories_protect_core on public.categories;
+create trigger categories_protect_core before delete on public.categories
+for each row execute function public.protect_core_category();
+
+-- =====================================================================
+--  تقرير الشهر: كل الأرقام تُحسب هنا بدقة، وClaude يكتب القراءة والملاحظات فقط
+-- =====================================================================
+create table if not exists public.ai_reports (
+  household_id uuid not null references public.households(id) on delete cascade,
+  month        date not null,
+  facts        jsonb not null,
+  content      jsonb not null,
+  created_at   timestamptz not null default now(),
+  primary key (household_id, month)
+);
+alter table public.ai_reports enable row level security;
+drop policy if exists ai_reports_select on public.ai_reports;
+create policy ai_reports_select on public.ai_reports for select to authenticated using (public.is_member(household_id));
+revoke insert, update, delete on public.ai_reports from anon, authenticated;
+
+-- الحقائق الرقمية للشهر (بالريال)
+create or replace function public.month_facts(p_household uuid, p_month date)
+returns jsonb language sql stable security definer set search_path = public as $$
+  with params as (
+    select date_trunc('month', p_month)::date as m,
+           (date_trunc('month', p_month) + interval '1 month - 1 day')::date as m_end,
+           (now() at time zone 'Asia/Riyadh')::date as today
+  ), p as (
+    select m, m_end, today,
+           least(m_end, today) as upto,
+           (m - interval '1 month')::date as pm,
+           (m - interval '1 day')::date as pm_end,
+           -- نفس الفترة من الشهر السابق
+           least((m - interval '1 month')::date + (least(m_end, today) - m), (m - interval '1 day')::date) as pm_same
+    from params
+  ), e as (
+    select x.*, c.name as cat, coalesce(nullif(x.sms_meta->>'merchant', ''), regexp_replace(coalesce(x.description, ''), '^📩\s*', '')) as label
+    from expenses x join categories c on c.id = x.category_id
+    where x.household_id = p_household
+  ), cur as (select e.* from e, p where e.expense_date between p.m and p.m_end),
+     prev as (select e.* from e, p where e.expense_date between p.pm and p.pm_end),
+     prev_same as (select e.* from e, p where e.expense_date between p.pm and p.pm_same)
+  select jsonb_build_object(
+    'month', (select m from p),
+    'is_current_month', (select today between m and m_end from p),
+    'days_elapsed', (select upto - m + 1 from p),
+    'days_in_month', (select m_end - m + 1 from p),
+    'total_sar', (select round(coalesce(sum(amount), 0) / 100.0, 2) from cur),
+    'transactions', (select count(*) from cur),
+    'previous_month_total_sar', (select round(coalesce(sum(amount), 0) / 100.0, 2) from prev),
+    'previous_month_same_period_sar', (select round(coalesce(sum(amount), 0) / 100.0, 2) from prev_same),
+    'daily_average_sar', (select round(coalesce(sum(amount), 0) / 100.0 / greatest((select upto - m + 1 from p), 1), 2) from cur),
+    'projected_month_total_sar', (select case when today between m and m_end and (upto - m + 1) >= 3
+                                   then round(coalesce((select sum(amount) from cur), 0) / 100.0 / (upto - m + 1) * (m_end - m + 1), 2) end from p),
+    'monthly_budget_sar', (select monthly_budget / 100.0 from households where id = p_household),
+    'by_category', (select coalesce(jsonb_agg(jsonb_build_object('category', cat, 'sar', sar, 'count', n, 'previous_month_sar', prev_sar) order by sar desc), '[]')
+                    from (select coalesce(a.cat, b.cat) as cat, coalesce(a.sar, 0) as sar, coalesce(a.n, 0) as n, coalesce(b.sar, 0) as prev_sar
+                          from (select cat, round(sum(amount) / 100.0, 2) as sar, count(*) as n from cur group by cat) a
+                          full join (select cat, round(sum(amount) / 100.0, 2) as sar from prev group by cat) b on a.cat = b.cat) t),
+    'top_merchants', (select coalesce(jsonb_agg(jsonb_build_object('merchant', label, 'sar', sar, 'count', n) order by sar desc), '[]')
+                      from (select label, round(sum(amount) / 100.0, 2) as sar, count(*) as n from cur where label <> '' group by label order by 2 desc limit 8) t),
+    'by_card', (select coalesce(jsonb_agg(jsonb_build_object('card', card, 'sar', sar, 'count', n) order by sar desc), '[]')
+                from (select coalesce(nullif(concat_ws(' ', sms_meta->>'card_type', sms_meta->>'card_kind', sms_meta->>'card_last4'), ''),
+                                      case when sms_meta is null then 'manual' else 'bank_sms_unknown_card' end) as card,
+                             round(sum(amount) / 100.0, 2) as sar, count(*) as n from cur group by 1) t),
+    'by_member', (select coalesce(jsonb_agg(jsonb_build_object('member', who, 'sar', sar) order by sar desc), '[]')
+                  from (select coalesce(hm.display_name, 'عضو سابق') as who, round(sum(cur.amount) / 100.0, 2) as sar
+                        from cur left join household_members hm on hm.user_id = cur.created_by and hm.household_id = p_household group by 1) t),
+    'largest', (select coalesce(jsonb_agg(jsonb_build_object('merchant', label, 'category', cat, 'sar', round(amount / 100.0, 2), 'date', expense_date) order by amount desc), '[]')
+                from (select * from cur order by amount desc limit 5) t),
+    'recurring', (select coalesce(jsonb_agg(jsonb_build_object('name', r.name, 'sar', r.amount / 100.0,
+                    'paid', exists (select 1 from expenses x, p where x.recurring_id = r.id and x.recurring_period = p.m))), '[]')
+                  from recurring_expenses r where r.household_id = p_household and r.is_active),
+    'possible_subscriptions', (select coalesce(jsonb_agg(jsonb_build_object('merchant', label, 'months', months, 'last_sar', last_sar)), '[]')
+                  from (select min(label) as label, count(distinct date_trunc('month', expense_date)) as months,
+                               (array_agg(amount order by expense_date desc))[1] / 100.0 as last_sar
+                        from e, p where e.expense_date >= (p.m - interval '3 months') and e.merchant_key is not null and e.recurring_id is null
+                        group by e.merchant_key
+                        having count(distinct date_trunc('month', expense_date)) >= 2
+                           and max(amount) <= min(amount) * 1.15) t),
+    'last_6_months', (select coalesce(jsonb_agg(jsonb_build_object('month', mo, 'sar', sar) order by mo), '[]')
+                      from (select date_trunc('month', expense_date)::date as mo, round(sum(amount) / 100.0, 2) as sar
+                            from e, p where e.expense_date >= (p.m - interval '5 months') and e.expense_date <= p.m_end group by 1) t)
+  )
+$$;
+
+create or replace function public.ai_month_report(p_month date, p_refresh boolean default false)
+returns jsonb language plpgsql security definer set search_path = public
+set statement_timeout to '70s'
+as $$
+declare
+  v_h uuid := public.my_household();
+  v_m date := date_trunc('month', p_month)::date;
+  v_facts jsonb;
+  v_content jsonb;
+  r ai_reports;
+begin
+  if v_h is null then raise exception 'not in a household'; end if;
+  select * into r from ai_reports where household_id = v_h and month = v_m;
+  if r.household_id is not null and not p_refresh then
+    return jsonb_build_object('content', r.content, 'facts', r.facts, 'created_at', r.created_at, 'cached', true);
+  end if;
+  if not public.ai_enabled() then raise exception 'ai not enabled'; end if;
+
+  v_facts := public.month_facts(v_h, v_m);
+  if (v_facts->>'transactions')::int = 0 then raise exception 'no expenses'; end if;
+
+  v_content := public.ai_call('report',
+    $sys$You are a sharp, friendly family-finance analyst for a Saudi household. You receive exact facts for one month (all amounts in SAR, already computed by the database). Write a short Arabic report (Saudi-friendly, clear, no fluff).
+Rules:
+- Use ONLY the numbers given. Never invent, estimate or recompute numbers beyond simple differences/percentages of the given values; round to whole riyals in text.
+- If is_current_month is true the month is not finished: compare with previous_month_same_period_sar, not the full previous month, and mention projected_month_total_sar when present.
+- Compare against the budget when monthly_budget_sar is present.
+- Point out what actually changed (categories that rose or fell notably), the biggest merchants, unusual large transactions, unpaid recurring expenses, and possible subscriptions not yet added as fixed expenses.
+- Tips must be practical and specific to this data (2–4 tips). No generic advice.
+- headline: one sentence. highlights: 3–5 bullets. alerts: 0–3 bullets (only real issues). tips: 2–4 bullets.$sys$,
+    'Facts:' || E'\n' || v_facts::text,
+    jsonb_build_object(
+      'name', 'month_report',
+      'description', 'The monthly report.',
+      'input_schema', jsonb_build_object(
+        'type', 'object',
+        'properties', jsonb_build_object(
+          'headline',   jsonb_build_object('type', 'string'),
+          'highlights', jsonb_build_object('type', 'array', 'items', jsonb_build_object('type', 'string')),
+          'alerts',     jsonb_build_object('type', 'array', 'items', jsonb_build_object('type', 'string')),
+          'tips',       jsonb_build_object('type', 'array', 'items', jsonb_build_object('type', 'string'))),
+        'required', jsonb_build_array('headline', 'highlights', 'alerts', 'tips'))),
+    1500);
+  if v_content is null then raise exception 'ai unavailable'; end if;
+
+  insert into ai_reports (household_id, month, facts, content) values (v_h, v_m, v_facts, v_content)
+  on conflict (household_id, month) do update set facts = excluded.facts, content = excluded.content, created_at = now();
+  return jsonb_build_object('content', v_content, 'facts', v_facts, 'created_at', now(), 'cached', false);
+end $$;
+
+revoke all on function public.month_facts(uuid, date) from public, anon, authenticated;
+revoke all on function public.ai_month_report(date, boolean) from public, anon;
+grant execute on function public.ai_month_report(date, boolean) to authenticated;
+revoke all on function public.protect_core_category() from public, anon, authenticated;
 
 notify pgrst, 'reload schema';
 
