@@ -462,6 +462,7 @@ notify pgrst, 'reload schema';
 --      - ربط التصنيف بالاسم ثم بالأيقونة، فلا يضيع إذا غيّرت اسم التصنيف
 --   2) رمز الاختصار من داخل التطبيق (عرض + تجديد) بدل SQL Editor
 --   3) المنشئ يزيل عضواً، والعضو يغادر العائلة
+--   4) منع تسجيل الاشتراك مرتين (رسالة البنك + «تسجيل الدفع» للمصروف الثابت)
 -- =====================================================================
 
 create or replace function public.sms_expense(token text, message text)
@@ -483,6 +484,7 @@ declare
   cat_icon  text;
   cat_id    uuid;
   v_id      uuid;
+  v_linked  text;
 begin
   select * into t from sms_tokens s where s.token = sms_expense.token;
   if t.user_id is null
@@ -571,6 +573,23 @@ begin
   limit 1;
   if cat_id is null then raise exception 'لا توجد تصنيفات'; end if;
 
+  if exists (select 1 from expenses where source_hash = md5(t.user_id::text || message)) then
+    return 'مسجّلة مسبقاً';
+  end if;
+
+  -- مصروف ثابت سجّلتم دفعه يدوياً هذا الشهر بنفس المبلغ: نربط الرسالة به بدل تسجيله مرتين
+  update expenses e set source_hash = md5(t.user_id::text || message)
+  where e.id = (
+    select x.id from expenses x
+    where x.household_id = t.household_id and x.recurring_id is not null and x.source_hash is null
+      and x.amount = v_amount
+      and x.recurring_period = date_trunc('month', (now() at time zone 'Asia/Riyadh'))::date
+    order by x.created_at
+    limit 1
+  )
+  returning e.description into v_linked;
+  if found then return format('مسجّلة مسبقاً كمصروف ثابت: %s', v_linked); end if;
+
   insert into expenses (household_id, category_id, amount, expense_date, description, created_by, source_hash)
   values (
     t.household_id, cat_id, v_amount, (now() at time zone 'Asia/Riyadh')::date,
@@ -586,6 +605,51 @@ end $$;
 
 revoke all on function public.sms_expense(text, text) from public;
 grant execute on function public.sms_expense(text, text) to anon, authenticated;
+
+-- ---------- تسجيل دفع مصروف ثابت ----------
+-- إن وصلت رسالة البنك قبل الضغط على «تسجيل الدفع» (نفس المبلغ ونفس الشهر)
+-- نربط تلك العملية بالمصروف الثابت بدل إنشاء عملية ثانية
+create or replace function public.mark_recurring_paid(p_recurring_id uuid, p_period date, p_date date default null)
+returns uuid
+language plpgsql security invoker set search_path = public
+as $$
+declare
+  r public.recurring_expenses;
+  v_period date := date_trunc('month', p_period)::date;
+  v_id uuid;
+begin
+  select * into r from recurring_expenses where id = p_recurring_id; -- RLS يحمي القراءة
+  if r.id is null then raise exception 'recurring expense not found'; end if;
+
+  select id into v_id from expenses where recurring_id = r.id and recurring_period = v_period;
+  if v_id is not null then return v_id; end if;
+
+  select id into v_id from expenses
+  where household_id = r.household_id and recurring_id is null and source_hash is not null
+    and amount = r.amount and date_trunc('month', expense_date)::date = v_period
+  order by expense_date, created_at
+  limit 1
+  for update;
+  if v_id is not null then
+    update expenses set recurring_id = r.id, recurring_period = v_period, category_id = r.category_id
+    where id = v_id;
+    return v_id;
+  end if;
+
+  insert into expenses (household_id, category_id, amount, expense_date, description, recurring_id, recurring_period)
+  values (
+    r.household_id, r.category_id, r.amount,
+    coalesce(p_date, (now() at time zone 'Asia/Riyadh')::date),
+    r.name, r.id, v_period
+  )
+  on conflict (recurring_id, recurring_period) do nothing
+  returning id into v_id;
+
+  if v_id is null then
+    select id into v_id from expenses where recurring_id = r.id and recurring_period = v_period;
+  end if;
+  return v_id;
+end $$;
 
 -- ---------- رمز الاختصار من التطبيق ----------
 create or replace function public.my_sms_token()
