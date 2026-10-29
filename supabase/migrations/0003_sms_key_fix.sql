@@ -1,4 +1,4 @@
--- (طُبّق مسبقاً) يقبل أسماء الحقول حتى لو دخلت معها مسافات من كيبورد الآيفون
+-- يقبل أسماء الحقول حتى لو دخلت معها مسافات من كيبورد الآيفون
 create or replace function public.sms_expense(jsonb)
 returns text language plpgsql security definer set search_path = public as $$
 declare k text; v_token text; v_msg text;
