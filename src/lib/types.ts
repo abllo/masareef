@@ -64,6 +64,8 @@ export interface Expense {
   /** مفتاح موحّد لاسم المتجر (للعمليات القادمة من رسائل البنك) */
   merchant_key: string | null;
   sms_meta: SmsMeta | null;
+  /** الرحلة التابع لها (مصاريف السفر منفصلة عن مصروف الشهر) */
+  trip_id?: string | null;
 }
 
 export type PaymentMethod = 'mada' | 'credit_card' | 'apple_pay' | 'online' | 'bill_payment' | 'other';
@@ -94,6 +96,9 @@ export interface SmsMeta {
   original_amount?: number;
   original_currency?: string;
   created_category?: string;
+  /** دولة الشراء (ISO) */
+  country?: string;
+  international?: boolean;
 }
 
 export interface SmsParseResult {
@@ -192,6 +197,23 @@ export interface MonthlyTotal {
 }
 
 // ---------- الإشعارات ----------
-export type NotifyKey = 'self' | 'family' | 'budget' | 'recurring' | 'monthly' | 'sms_issue';
+export type NotifyKey = 'self' | 'family' | 'budget' | 'recurring' | 'monthly' | 'sms_issue' | 'travel';
 export type NotifyPrefs = Record<NotifyKey, boolean>;
 export interface PushStatus { prefs: NotifyPrefs; devices: number; public_key: string | null }
+
+// ---------- الرحلات ----------
+export interface Trip {
+  id: string;
+  household_id: string;
+  name: string;
+  countries: string[];
+  start_date: ISODate;
+  end_date: ISODate | null;
+  last_abroad_date: ISODate | null;
+  status: 'active' | 'closed';
+  budget: Halalas | null;
+  card_last4: string | null;
+  auto: boolean;
+  created_by: string | null;
+  created_at: string;
+}

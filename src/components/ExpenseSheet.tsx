@@ -1,15 +1,16 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
-import { ArrowSquareOut, Camera, ChatCircleText, CheckCircle, Receipt as ReceiptIcon, Sparkle, Trash } from '@phosphor-icons/react';
-import { useCards, useCategories, useDeleteExpense, useSaveExpense } from '../hooks/queries';
-import { useCanEdit, useMemberName } from '../hooks/household';
+import { AirplaneTilt, ArrowSquareOut, Camera, ChatCircleText, CheckCircle, Receipt as ReceiptIcon, Sparkle, Trash } from '@phosphor-icons/react';
+import { useCards, useCategories, useDeleteExpense, useSaveExpense, useTrips } from '../hooks/queries';
+import { countryName, flag } from '../lib/countries';
+import { useCanEdit, useHousehold, useMemberName } from '../hooks/household';
 import { receiptUrl } from '../lib/api';
 import { addDays, formatDayLabel, todayISO } from '../lib/dates';
 import { formatSAR, parseAmount, toInputValue } from '../lib/money';
 import { cardLabel, channelLabel, fxLabel } from '../lib/stats';
 import type { Expense } from '../lib/types';
 import type { ExpenseDraft } from './Layout';
-import { Button, CategoryIcon, ConfirmButton, Sheet, cx } from './ui';
+import { Button, CategoryIcon, ConfirmButton, Select, Sheet, cx } from './ui';
 
 export function ExpenseSheet({ open, onOpenChange, expense, draft }: {
   open: boolean; onOpenChange: (o: boolean) => void; expense?: Expense; draft?: ExpenseDraft;
@@ -30,6 +31,7 @@ function SmsDetails({ expense }: { expense: Expense }) {
   const cardMap = new Map(cards.map((c) => [c.card_last4, c]));
   const fx = fxLabel(meta);
   const parts = [
+    meta.country && meta.country !== 'SA' && `${flag(meta.country)} ${countryName(meta.country)}`,
     cardLabel(meta, cardMap),
     channelLabel(meta),
     fx && `${fx}${meta.approx ? ' ≈' : ''}`,
@@ -67,6 +69,13 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
   const [description, setDescription] = useState(expense?.description ?? draft?.description ?? '');
   const [receipt, setReceipt] = useState<File | null>(null);
   const [touched, setTouched] = useState(false);
+  // الرحلة: مصروف جديد أثناء رحلة جارية لصاحبها يُحسب عليها تلقائياً (ويقدر يغيّره)
+  const { me } = useHousehold();
+  const { data: trips = [] } = useTrips();
+  const activeTrip = trips.find((t) => t.status === 'active');
+  const [tripChoice, setTripId] = useState<string | null>(null); // null = الافتراضي
+  const tripId = tripChoice ?? (expense ? expense.trip_id ?? '' : activeTrip && activeTrip.created_by === me.user_id ? activeTrip.id : '');
+  const tripOptions = trips.filter((t, i) => i < 8 || t.id === tripId);
 
   const amount = parseAmount(amountText);
   const visible = useMemo(
@@ -84,7 +93,7 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
     const saved = await save.mutateAsync({
       id: expense?.id,
       receipt,
-      input: { amount, category_id: categoryId, expense_date: date, description: description.trim() || null },
+      input: { amount, category_id: categoryId, expense_date: date, description: description.trim() || null, trip_id: tripId || null },
     }).catch(() => null);
     if (!saved) return;
     toast.success(expense ? 'تم حفظ التعديل' : `تمت إضافة ${formatSAR(amount)}`);
@@ -189,6 +198,11 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
         <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden"
           onChange={(e) => setReceipt(e.target.files?.[0] ?? null)} />
       </div>
+      {(tripOptions.length > 0) && (
+        <Select label="الرحلة" icon={AirplaneTilt} value={tripId} onChange={setTripId} showLabel
+          options={[{ value: '', label: 'بدون رحلة (مصاريف الشهر)' },
+            ...tripOptions.map((t) => ({ value: t.id, label: `${t.name}${t.status === 'active' ? ' (جارية)' : ''}` }))]} />
+      )}
       </fieldset>
 
       {expense?.sms_meta && <SmsDetails expense={expense} />}

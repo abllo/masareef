@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { Alarm, CaretLeft, ChartPieSlice, Receipt, Target, TrendDown, TrendUp } from '@phosphor-icons/react';
+import { AirplaneTilt, Alarm, CaretLeft, ChartPieSlice, Receipt, Target, TrendDown, TrendUp } from '@phosphor-icons/react';
 import { CategoryDonut, MonthlyBars } from '../components/Charts';
 import { AiReportCard, InsightsCard } from '../components/Insights';
 import { ExpenseRow } from '../components/ExpenseList';
@@ -9,11 +9,12 @@ import { useExpenseSheet } from '../components/Layout';
 import { Logo } from '../components/Logo';
 import { AnimatedAmount, Button, Card, CategoryIcon, EmptyState, MonthSwitcher, SectionTitle, Spinner, cx } from '../components/ui';
 import { useHousehold } from '../hooks/household';
-import { useCategories, useExpenses, useMonthExpenses, useMonthlyTotals, useRecurring, useRecurringPayments } from '../hooks/queries';
+import { useCategories, useExpenses, useMonthExpenses, useMonthlyTotals, useRecurring, useRecurringPayments, useTrips } from '../hooks/queries';
+import { flag } from '../lib/countries';
 import { formatMonth, lastMonths, monthOf, todayISO } from '../lib/dates';
 import { formatSAR, sumHalalas } from '../lib/money';
 import { recurringForMonth } from '../lib/recurring';
-import { budgetStatus, byCategory, changeRatio, comparisonRange, monthlySeries } from '../lib/stats';
+import { budgetStatus, byCategory, changeRatio, comparisonRange, monthlySeries, splitTravel } from '../lib/stats';
 
 export default function Dashboard() {
   const today = todayISO();
@@ -29,11 +30,16 @@ export default function Dashboard() {
   const cmp = comparisonRange(month, today);
   const previousExpenses = useExpenses(cmp.from, cmp.to);
 
-  const list = expenses.data ?? [];
+  const all = expenses.data ?? [];
+  // مصاريف الرحلات منفصلة: لا تدخل في مصروف الشهر وميزانيته
+  const { regular: list, travel } = useMemo(() => splitTravel(all), [all]);
   const total = sumHalalas(list.map((e) => e.amount));
+  const travelTotal = sumHalalas(travel.map((e) => e.amount));
+  const { data: trips = [] } = useTrips();
+  const activeTrip = trips.find((t) => t.status === 'active');
   const slices = useMemo(() => byCategory(list, categories), [list, categories]);
   const series = monthlySeries(monthly.data ?? [], lastMonths(monthOf(today), 6));
-  const previous = sumHalalas((previousExpenses.data ?? []).map((e) => e.amount));
+  const previous = sumHalalas(splitTravel(previousExpenses.data ?? []).regular.map((e) => e.amount));
   const change = previousExpenses.isSuccess && !previousExpenses.isPlaceholderData ? changeRatio(total, previous) : null;
   const budget = budgetStatus(total, household.monthly_budget, month, today);
   const unpaid = recurringForMonth(recurring.data ?? [], payments.data ?? [], month, today).filter((r) => r.status !== 'paid');
@@ -104,6 +110,23 @@ export default function Dashboard() {
         </div>
       </section>
 
+      {(activeTrip || travelTotal > 0) && (
+        <Link to={activeTrip ? `/trips/${activeTrip.id}` : '/trips'}
+          className="flex items-center gap-3 rounded-card bg-surface px-4 py-3.5 text-sm shadow-[0_1px_2px_rgb(0_0_0/0.04)] transition active:opacity-80">
+          <span className="flex size-10 items-center justify-center rounded-2xl bg-brand-soft text-brand">
+            <AirplaneTilt className="size-6" weight="duotone" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-semibold">
+              {activeTrip ? `${activeTrip.name} جارية ${activeTrip.countries.map(flag).join(' ')}` : `سفر ${formatMonth(month)}`}
+            </span>
+            <span className="text-xs text-muted">منفصلة عن مصروف الشهر وميزانيته</span>
+          </span>
+          {travelTotal > 0 && <span className="num font-bold">{formatSAR(travelTotal)}</span>}
+          <CaretLeft className="size-4 text-muted" weight="bold" />
+        </Link>
+      )}
+
       {unpaid.length > 0 && (
         <Link to="/recurring"
           className="flex items-center gap-3 rounded-card bg-warn-soft px-4 py-3.5 text-sm transition active:opacity-80">
@@ -118,7 +141,7 @@ export default function Dashboard() {
         </Link>
       )}
 
-      {expenses.isPending ? <Spinner /> : list.length === 0 ? (
+      {expenses.isPending ? <Spinner /> : all.length === 0 ? (
         <EmptyState icon={Receipt} title={`لا توجد مصروفات في ${formatMonth(month)}`}>
           سجّلوا أول مصروف، وستظهر هنا الإحصائيات والرسوم.
           <div className="mt-4"><Button onClick={() => openSheet()}>إضافة مصروف</Button></div>
@@ -161,7 +184,7 @@ export default function Dashboard() {
                   الكل <CaretLeft className="size-4" weight="bold" />
                 </Link>
               </div>
-              {list.slice(0, 6).map((e) => (
+              {all.slice(0, 6).map((e) => (
                 <ExpenseRow key={e.id} expense={e} category={categories.find((c) => c.id === e.category_id)} />
               ))}
             </Card>

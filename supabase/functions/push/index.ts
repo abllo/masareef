@@ -184,11 +184,8 @@ export async function handle(req: Request): Promise<Response> {
 
     // من قاعدة البيانات
     if (!body.secret || body.secret !== cfg.hook_secret) return json({ error: 'unauthorized' }, 401);
-    const messages =
-      body.kind === 'expense' ? await rpc<PushMessage[]>('push_expense_messages', { p_expense: body.id })
-      : body.kind === 'sms' ? await rpc<PushMessage[]>('push_sms_messages', { p_log: body.id })
-      : body.kind === 'daily' ? await rpc<PushMessage[]>('push_daily_messages', {})
-      : [];
+    // كل الأنواع (مصروف، رسالة بنك، يومي، نهاية رحلة، …) تُبنى في قاعدة البيانات
+    const messages = body.kind ? await rpc<PushMessage[]>('push_build', { p_kind: body.kind, p_id: body.id ?? null }) : [];
     return json(await deliver(messages, cfg));
   } catch (e) {
     console.error(e);

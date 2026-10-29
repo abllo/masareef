@@ -14,6 +14,7 @@ const KINDS: { key: NotifyKey; title: string; hint: string }[] = [
   { key: 'recurring', title: 'المصاريف الثابتة', hint: 'يوم موعد الدفع الساعة 9 الصبح' },
   { key: 'monthly', title: 'ملخص الشهر والسنة', hint: 'أول كل شهر، وأول السنة' },
   { key: 'sms_issue', title: 'رسالة بنك ما انسجلت', hint: 'عملية مرفوضة، أو رسالة ما انقرأت' },
+  { key: 'travel', title: 'الرحلات', hint: 'ميزانية الرحلة، وملخصها لما تنتهي' },
 ];
 
 function Switch({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {

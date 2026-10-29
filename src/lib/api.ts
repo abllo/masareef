@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import type {
   AiStatus, Card, Category, CategoryAudit, CategoryPlan, Expense, Household, ISODate, Member, MerchantRule, MonthKey, MonthlyTotal, MonthReport,
-  NotifyPrefs, PlanOp, PlanResult, PushStatus, Recurring, SmsLogEntry, SmsParseResult,
+  NotifyPrefs, PlanOp, PlanResult, PushStatus, Recurring, SmsLogEntry, SmsParseResult, Trip,
 } from './types';
 
 /** يرمي خطأ مقروءاً بالعربية عند فشل الطلب */
@@ -25,6 +25,10 @@ export function translateError(message: string, code?: string): string {
   if (/ai not enabled/i.test(message)) return 'الذكاء الاصطناعي غير مفعّل بعد: أضف مفتاح Claude في Supabase';
   if (/ai unavailable/i.test(message)) return 'تعذّر الوصول لـ Claude الآن، جرّب بعد قليل';
   if (/core category/i.test(message)) return 'هذا تصنيف أساسي مثبّت، لا يمكن حذفه (تقدر تغيّر اسمه أو لونه)';
+  if (/year archived/i.test(message)) return 'هذه السنة مؤرشفة: محفوظ ملخصها فقط، فما تقدر تضيف لها عمليات';
+  if (/year not finished/i.test(message)) return 'تقدر تأرشف السنوات المنتهية فقط';
+  if (/confirmation mismatch/i.test(message)) return 'اكتب رقم السنة بالضبط للتأكيد';
+  if (/year already archived/i.test(message)) return 'هذه السنة مؤرشفة من قبل';
   if (/invalid subscription/i.test(message)) return 'تعذّر تفعيل الإشعارات على هذا الجهاز';
   if (/no expenses/i.test(message)) return 'ما فيه عمليات في هذا الشهر للتحليل';
   if (/statement timeout|canceling statement/i.test(message)) return 'أخذ وقتاً أطول من المتوقع، جرّب مرة ثانية';
@@ -107,7 +111,7 @@ export const deleteCategory = async (id: string) => check(await supabase.from('c
 
 // ---------- المصروفات ----------
 const EXPENSE_COLUMNS =
-  'id,household_id,category_id,amount,expense_date,description,receipt_path,recurring_id,recurring_period,created_by,created_at,updated_at,merchant_key,sms_meta';
+  'id,household_id,category_id,amount,expense_date,description,receipt_path,recurring_id,recurring_period,created_by,created_at,updated_at,merchant_key,sms_meta,trip_id';
 
 export const fetchExpenses = async (householdId: string, from: ISODate, to: ISODate) =>
   check(
@@ -134,6 +138,7 @@ export interface ExpenseInput {
   category_id: string;
   expense_date: ISODate;
   description: string | null;
+  trip_id?: string | null;
 }
 
 export async function saveExpense(
@@ -308,3 +313,29 @@ async function callPush<T>(action: 'init' | 'test'): Promise<T> {
 }
 export const initPush = () => callPush<{ publicKey: string }>('init');
 export const sendTestPush = () => callPush<{ sent: number; failed: unknown[] }>('test');
+
+// ---------- الرحلات ----------
+export const fetchTrips = async (householdId: string) =>
+  check(await supabase.from('trips').select('*').eq('household_id', householdId).order('start_date', { ascending: false })) as Trip[];
+
+export const fetchTripExpenses = async (tripId: string) =>
+  check(
+    await supabase.from('expenses').select(EXPENSE_COLUMNS).eq('trip_id', tripId)
+      .order('expense_date', { ascending: false }).order('created_at', { ascending: false }).limit(1000),
+  ) as Expense[];
+
+export async function updateTrip(id: string, patch: Partial<Pick<Trip, 'name' | 'budget' | 'card_last4'>>) {
+  const { error, count } = await supabase.from('trips').update(patch, { count: 'exact' }).eq('id', id);
+  if (error) throw new Error(translateError(error.message, error.code));
+  if (count === 0) throw new Error('هذا الإجراء لمنشئ العائلة فقط');
+}
+
+export const setTripStatus = async (id: string, active: boolean) => {
+  check(await supabase.rpc('set_trip_status', { p_trip: id, p_active: active }));
+};
+
+export async function deleteTrip(id: string) {
+  const { error, count } = await supabase.from('trips').delete({ count: 'exact' }).eq('id', id);
+  if (error) throw new Error(translateError(error.message, error.code));
+  if (count === 0) throw new Error('هذا الإجراء لمنشئ العائلة فقط');
+}

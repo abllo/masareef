@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
 import { NavLink } from 'react-router';
-import { GearSix, House, ListBullets, Plus, Repeat, type Icon } from '@phosphor-icons/react';
+import { AirplaneTilt, GearSix, House, ListBullets, Plus, Repeat, type Icon } from '@phosphor-icons/react';
 import { useHousehold } from '../hooks/household';
 import { useRealtimeSync } from '../hooks/realtime';
 import { usePushRefresh } from '../hooks/push';
@@ -21,6 +21,11 @@ const NAV: { to: string; label: string; icon: Icon; end?: boolean }[] = [
   { to: '/expenses', label: 'العمليات', icon: ListBullets },
   { to: '/recurring', label: 'الثابتة', icon: Repeat },
   { to: '/settings', label: 'الإعدادات', icon: GearSix },
+];
+
+/** روابط إضافية في الشريط الجانبي للكمبيوتر (في الجوال تُفتح من الرئيسية والعمليات) */
+const EXTRA_NAV: typeof NAV = [
+  { to: '/trips', label: 'الرحلات', icon: AirplaneTilt },
 ];
 
 export function Layout({ children }: { children: ReactNode }) {
@@ -47,7 +52,7 @@ export function Layout({ children }: { children: ReactNode }) {
             className="mb-4 flex h-12 items-center justify-center gap-2 rounded-2xl bg-brand font-semibold text-brand-ink shadow-sm shadow-brand/30 hover:opacity-90">
             <Plus className="size-5" weight="bold" /> إضافة مصروف
           </button>
-          {NAV.map(({ to, label, icon: NavIcon, end }) => (
+          {[...NAV, ...EXTRA_NAV].map(({ to, label, icon: NavIcon, end }) => (
             <NavLink key={to} to={to} end={end}
               className={({ isActive }) => cx(
                 'flex h-11 items-center gap-3 rounded-xl px-3 font-medium transition',

@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { ChatCircleText, Paperclip, Repeat } from '@phosphor-icons/react';
+import { AirplaneTilt, ChatCircleText, Paperclip, Repeat } from '@phosphor-icons/react';
+import { flag } from '../lib/countries';
 import { useMemberName } from '../hooks/household';
 import { formatDayLabel } from '../lib/dates';
 import { formatSAR } from '../lib/money';
@@ -24,6 +25,8 @@ export function ExpenseRow({ expense, category }: { expense: Expense; category?:
           {expense.recurring_id && <Repeat className="size-3.5" weight="bold" aria-label="مصروف ثابت" />}
           {expense.receipt_path && <Paperclip className="size-3.5" weight="bold" aria-label="فاتورة مرفقة" />}
           {expense.description?.startsWith('📩') && <ChatCircleText className="size-3.5" weight="bold" aria-label="من رسالة البنك" />}
+          {expense.trip_id && <AirplaneTilt className="size-3.5 text-brand" weight="bold" aria-label="مصروف رحلة" />}
+          {expense.sms_meta?.country && expense.sms_meta.country !== 'SA' && <span aria-hidden>{flag(expense.sms_meta.country)}</span>}
         </span>
       </span>
       <span className="num shrink-0 font-semibold">{formatSAR(expense.amount)}</span>

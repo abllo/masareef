@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Link } from 'react-router';
-import { Bank, CalendarDots, ChatCircleText, CreditCard, FilePdf, FileXls, FunnelSimple, MagnifyingGlass, Receipt, Tag, User, X } from '@phosphor-icons/react';
+import { AirplaneTilt, Bank, CalendarDots, ChatCircleText, CreditCard, FilePdf, FileXls, FunnelSimple, MagnifyingGlass, Receipt, Tag, User, X } from '@phosphor-icons/react';
 import { ExpenseGroups } from '../components/ExpenseList';
 import { Button, EmptyState, IconButton, MonthSwitcher, Select, Spinner } from '../components/ui';
 import { useHousehold } from '../hooks/household';
@@ -25,6 +25,7 @@ export default function Expenses() {
   const [memberId, setMemberId] = useState('');
   const [card, setCard] = useState('');
   const [bank, setBank] = useState('');
+  const [kind, setKind] = useState<'' | 'regular' | 'travel'>('');
   const { data: cardRows = [] } = useCards();
   const cardMap = useMemo(() => new Map(cardRows.map((c) => [c.card_last4, c])), [cardRows]);
   const [exporting, setExporting] = useState(false);
@@ -37,12 +38,14 @@ export default function Expenses() {
   const banks = useMemo(() => [...new Set(data.map((e) => expenseBank(e, cardMap)))].sort(), [data, cardMap]);
   const filtered = useMemo(
     () => filterExpenses(data, { query, categoryId: categoryId || null, memberId: memberId || null }, categories)
-      .filter((e) => (!card || expenseCard(e, cardMap) === card) && (!bank || expenseBank(e, cardMap) === bank)),
-    [data, query, categoryId, memberId, categories, card, bank, cardMap],
+      .filter((e) => (!card || expenseCard(e, cardMap) === card) && (!bank || expenseBank(e, cardMap) === bank))
+      .filter((e) => !kind || (kind === 'travel' ? Boolean(e.trip_id) : !e.trip_id)),
+    [data, query, categoryId, memberId, categories, card, bank, cardMap, kind],
   );
   const total = sumHalalas(filtered.map((e) => e.amount));
   const periodLabel = custom ? `${formatDayShort(from)} – ${formatDayShort(to)}` : formatMonth(month);
-  const hasFilters = Boolean(query || categoryId || memberId || card || bank);
+  const hasFilters = Boolean(query || categoryId || memberId || card || bank || kind);
+  const hasTravel = data.some((e) => e.trip_id);
 
   const report = () => ({ title: `مصاريف ${household.name}`, periodLabel, expenses: filtered, categories, members });
 
@@ -70,6 +73,10 @@ export default function Expenses() {
       <header className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-bold">العمليات</h1>
         <div className="flex items-center gap-1">
+          <Link to="/trips" aria-label="الرحلات" title="الرحلات"
+            className="inline-flex size-10 items-center justify-center rounded-full bg-surface text-muted shadow-sm transition hover:text-ink">
+            <AirplaneTilt className="size-5" />
+          </Link>
           <Link to="/messages" aria-label="سجل رسائل البنك" title="سجل رسائل البنك"
             className="inline-flex size-10 items-center justify-center rounded-full bg-surface text-muted shadow-sm transition hover:text-ink">
             <ChatCircleText className="size-5" />
@@ -111,6 +118,10 @@ export default function Expenses() {
           <Select label="البنك" icon={Bank} value={bank} onChange={setBank}
             options={[{ value: '', label: 'كل البنوك' }, ...banks.map((b) => ({ value: b, label: b }))]} />
         )}
+        {hasTravel && (
+          <Select label="النوع" icon={AirplaneTilt} value={kind} onChange={(v) => setKind(v as typeof kind)}
+            options={[{ value: '', label: 'الكل' }, { value: 'regular', label: 'مصاريف الشهر' }, { value: 'travel', label: 'السفر فقط' }]} />
+        )}
         {cards.length > 1 && (
           <Select label="البطاقة" icon={CreditCard} value={card} onChange={setCard}
             options={[{ value: '', label: 'كل البطاقات' }, ...cards.map((c) => ({ value: c, label: c }))]} />
@@ -125,7 +136,7 @@ export default function Expenses() {
         <div className="flex gap-2">
           {hasFilters && (
             <Button variant="ghost" className="h-10 px-3 text-sm"
-              onClick={() => { setQuery(''); setCategoryId(''); setMemberId(''); setCard(''); setBank(''); }}>
+              onClick={() => { setQuery(''); setCategoryId(''); setMemberId(''); setCard(''); setBank(''); setKind(''); }}>
               <X className="size-4" weight="bold" /> مسح
             </Button>
           )}

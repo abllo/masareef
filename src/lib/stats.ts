@@ -251,3 +251,33 @@ export function fxLabel(meta: SmsMeta | null | undefined): string | null {
   const fee = meta.fx_fee_pct ? ` + رسوم ${meta.fx_fee_pct}%` : '';
   return `${base} × ${Number(meta.fx_rate).toFixed(4)} (${src})${fee}`;
 }
+
+// ---------- السفر ----------
+/** يفصل مصاريف الرحلات عن مصاريف الشهر العادية */
+export function splitTravel<T extends Pick<Expense, 'trip_id'>>(list: readonly T[]): { regular: T[]; travel: T[] } {
+  const regular: T[] = [];
+  const travel: T[] = [];
+  for (const e of list) (e.trip_id ? travel : regular).push(e);
+  return { regular, travel };
+}
+
+export interface CurrencyTotal { currency: string; original: number; total: Halalas; count: number }
+
+/** المصروف حسب العملة الأصلية (الريال للعمليات المحلية) */
+export function byCurrency(expenses: readonly Expense[]): CurrencyTotal[] {
+  const map = new Map<string, CurrencyTotal>();
+  for (const e of expenses) {
+    const cur = e.sms_meta?.original_currency ?? 'SAR';
+    const row = map.get(cur) ?? { currency: cur, original: 0, total: 0, count: 0 };
+    row.original += cur === 'SAR' ? e.amount / 100 : Number(e.sms_meta?.original_amount ?? 0);
+    row.total += e.amount;
+    row.count += 1;
+    map.set(cur, row);
+  }
+  return [...map.values()].sort((a, b) => b.total - a.total);
+}
+
+/** عدد أيام الرحلة (شاملة اليومين) */
+export function tripDays(start: ISODate, end: ISODate): number {
+  return Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000) + 1;
+}

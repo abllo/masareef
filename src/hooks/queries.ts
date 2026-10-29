@@ -17,10 +17,12 @@ export const keys = {
   aiStatus: (h: string) => ['ai-status', h] as const,
   audit: (h: string) => ['category-audit', h] as const,
   cards: (h: string) => ['cards', h] as const,
+  trips: (h: string) => ['trips', h] as const,
+  tripExpenses: (id: string) => ['trip-expenses', id] as const,
 };
 
 /** كل ما يتأثر بتغيير في المصروفات */
-export const EXPENSE_DEPENDENT = ['expenses', 'monthly', 'recurring-payments'];
+export const EXPENSE_DEPENDENT = ['expenses', 'monthly', 'recurring-payments', 'trips', 'trip-expenses', 'years'];
 
 const onError = (e: Error) => toast.error(e.message);
 
@@ -184,4 +186,37 @@ export function useUpdateHousehold() {
     onSettled: () => invalidate('household'),
     onError,
   });
+}
+
+// ---------- الرحلات ----------
+export function useTrips() {
+  const { household } = useHousehold();
+  return useQuery({ queryKey: keys.trips(household.id), queryFn: () => api.fetchTrips(household.id) });
+}
+
+export function useTripExpenses(tripId: string | undefined) {
+  return useQuery({
+    queryKey: keys.tripExpenses(tripId ?? '-'),
+    queryFn: () => api.fetchTripExpenses(tripId!),
+    enabled: Boolean(tripId),
+  });
+}
+
+export function useTripActions() {
+  const invalidate = useInvalidate();
+  const done = () => invalidate(...EXPENSE_DEPENDENT);
+  return {
+    update: useMutation({
+      mutationFn: (v: { id: string; patch: Parameters<typeof api.updateTrip>[1] }) => api.updateTrip(v.id, v.patch),
+      onSuccess: () => toast.success('تم حفظ الرحلة'), onSettled: done, onError,
+    }),
+    status: useMutation({
+      mutationFn: (v: { id: string; active: boolean }) => api.setTripStatus(v.id, v.active),
+      onSuccess: (_d, v) => toast.success(v.active ? 'رجعت الرحلة جارية' : 'انتهت الرحلة'), onSettled: done, onError,
+    }),
+    remove: useMutation({
+      mutationFn: api.deleteTrip,
+      onSuccess: () => toast.success('حذفت الرحلة، ومصاريفها رجعت لمصاريف الشهر'), onSettled: done, onError,
+    }),
+  };
 }

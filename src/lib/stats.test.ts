@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { budgetStatus, byBank, byCategory, byPaymentMethod, changeRatio, comparisonRange, filterExpenses, groupByDay, monthProjection, monthlySeries, topMerchants } from './stats';
+import { budgetStatus, byBank, byCategory, byCurrency, byPaymentMethod, changeRatio, comparisonRange, filterExpenses, groupByDay, monthProjection, monthlySeries, splitTravel, topMerchants, tripDays } from './stats';
 import { recurringForMonth } from './recurring';
 import type { Category, Expense, Recurring } from './types';
 
@@ -133,5 +133,29 @@ describe('insights', () => {
     expect(monthProjection(10000, '2026-10-01', '2026-10-10')).toBe(31000);
     expect(monthProjection(10000, '2026-10-01', '2026-10-02')).toBeNull();
     expect(monthProjection(10000, '2026-09-01', '2026-10-10')).toBeNull();
+  });
+});
+
+describe('travel', () => {
+  const list = [
+    exp('1', 'a', 6237, '2026-11-02', { trip_id: 't1', sms_meta: { original_amount: 12.5, original_currency: 'GBP' } }),
+    exp('2', 'a', 20000, '2026-11-03', { trip_id: 't1', sms_meta: { original_amount: 40, original_currency: 'GBP' } }),
+    exp('3', 'b', 9900, '2026-11-04', { trip_id: 't1' }),
+    exp('4', 'b', 4500, '2026-11-03'),
+  ];
+  it('separates trip expenses from the month', () => {
+    const { regular, travel } = splitTravel(list);
+    expect(regular.map((e) => e.id)).toEqual(['4']);
+    expect(travel.map((e) => e.id)).toEqual(['1', '2', '3']);
+  });
+  it('sums by original currency', () => {
+    expect(byCurrency(splitTravel(list).travel)).toEqual([
+      { currency: 'GBP', original: 52.5, total: 26237, count: 2 },
+      { currency: 'SAR', original: 99, total: 9900, count: 1 },
+    ]);
+  });
+  it('counts trip days inclusively', () => {
+    expect(tripDays('2026-11-02', '2026-11-04')).toBe(3);
+    expect(tripDays('2026-12-30', '2027-01-02')).toBe(4);
   });
 });
