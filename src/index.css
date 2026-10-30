@@ -104,3 +104,7 @@ input[type="date"]::-webkit-calendar-picker-indicator { opacity: .6; }
   #print-root td.num { direction: ltr; text-align: left; font-variant-numeric: tabular-nums; white-space: nowrap; }
   #print-root tr { break-inside: avoid; }
 }
+
+/* إخفاء المبالغ أمام الناس (زر العين في الرئيسية) */
+.hide-amounts main .num,
+.hide-amounts main .recharts-wrapper { filter: blur(8px); transition: filter 0.2s; }

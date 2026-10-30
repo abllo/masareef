@@ -8,6 +8,7 @@ import { Button, Card, cx } from './ui';
 
 const KINDS: { key: NotifyKey; title: string }[] = [
   { key: 'self', title: 'مصاريفي' },
+  { key: 'income', title: 'الراتب والإيداعات' },
   { key: 'family', title: 'مصاريف العائلة' },
   { key: 'budget', title: 'الميزانية' },
   { key: 'recurring', title: 'المصاريف الثابتة' },

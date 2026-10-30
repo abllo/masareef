@@ -4,8 +4,16 @@ import { toast } from 'sonner';
 import * as api from '../lib/api';
 import { addMonths, monthEnd } from '../lib/dates';
 import { hideExpense, showExpense, useHiddenExpenses } from '../lib/pendingDelete';
+import { isNetworkError, isOffline, queueExpense } from '../lib/offline';
 import type { Expense, ISODate, MonthKey } from '../lib/types';
 import { useHousehold } from './household';
+
+function pendingExpense(householdId: string, input: api.ExpenseInput): Expense & { pending: true } {
+  const p = queueExpense(householdId, input);
+  const now = new Date().toISOString();
+  return { ...input, id: p.id, household_id: householdId, receipt_path: null, recurring_id: null, recurring_period: null,
+    created_by: '', created_at: now, updated_at: now, merchant_key: null, sms_meta: null, pending: true };
+}
 
 /** يخفي العمليات اللي تنتظر الحذف (مهلة «تراجع») من أي قائمة */
 function useWithoutHidden() {
@@ -114,8 +122,17 @@ export function useSaveExpense() {
   const { household } = useHousehold();
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (v: { input: api.ExpenseInput; id?: string; receipt?: File | null }) =>
-      api.saveExpense(household.id, v.input, { id: v.id, receipt: v.receipt }),
+    mutationFn: async (v: { input: api.ExpenseInput; id?: string; receipt?: File | null }): Promise<Expense & { pending?: boolean }> => {
+      // بدون إنترنت: المصروف الجديد ينحفظ في الجهاز ويرتفع أول ما يرجع الاتصال
+      const canQueue = !v.id && !v.receipt;
+      if (canQueue && isOffline()) return pendingExpense(household.id, v.input);
+      try {
+        return await api.saveExpense(household.id, v.input, { id: v.id, receipt: v.receipt });
+      } catch (e) {
+        if (canQueue && isNetworkError(e)) return pendingExpense(household.id, v.input);
+        throw e;
+      }
+    },
     onSettled: () => invalidate(...EXPENSE_DEPENDENT, 'rules'),
     onError,
   });
@@ -270,4 +287,10 @@ export function useYears() {
 export function useRenewals() {
   const { household } = useHousehold();
   return useQuery({ queryKey: ['renewals', household.id], queryFn: () => api.fetchRenewals(household.id) });
+}
+
+// ---------- الدخل (خاص بكل شخص) ----------
+export function useIncomes(from: ISODate, to: ISODate) {
+  const { me } = useHousehold();
+  return useQuery({ queryKey: ['incomes', me.user_id, from, to], queryFn: () => api.fetchIncomes(from, to) });
 }

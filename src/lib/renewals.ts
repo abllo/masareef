@@ -2,12 +2,12 @@ import type { ISODate, Renewal, RenewalKind } from './types';
 
 export const KIND_LABELS: Record<RenewalKind, string> = {
   insurance: 'تأمين', istimara: 'استمارة', license: 'رخصة قيادة', passport: 'جواز سفر', iqama: 'إقامة', national_id: 'هوية',
-  warranty: 'ضمان', subscription: 'اشتراك', contract: 'عقد', rent: 'إيجار', school: 'رسوم مدرسية', other: 'أخرى',
+  warranty: 'ضمان', subscription: 'اشتراك', contract: 'عقد', rent: 'إيجار', school: 'رسوم مدرسية', bill: 'فاتورة', other: 'أخرى',
 };
 
 export const KIND_EMOJI: Record<RenewalKind, string> = {
   insurance: '🛡️', istimara: '🚗', license: '🪪', passport: '🛂', iqama: '🪪', national_id: '🪪',
-  warranty: '🔧', subscription: '🔁', contract: '📝', rent: '🏠', school: '🎓', other: '📄',
+  warranty: '🔧', subscription: '🔁', contract: '📝', rent: '🏠', school: '🎓', bill: '🧾', other: '📄',
 };
 
 export const PERIOD_OPTIONS = [

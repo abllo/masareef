@@ -7,6 +7,8 @@ import { MotionConfig } from 'motion/react';
 import App from './App';
 import { AuthProvider } from './hooks/auth';
 import { registerServiceWorker } from './lib/push';
+import { applyAmountsHidden } from './lib/lock';
+import { flushPending, persistCache, restoreCache } from './lib/offline';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -16,6 +18,21 @@ const queryClient = new QueryClient({
 });
 
 registerServiceWorker();
+applyAmountsHidden();
+// آخر نسخة من البيانات تظهر فوراً حتى بدون إنترنت، وتتحدث أول ما يرجع الاتصال
+restoreCache(queryClient);
+persistCache(queryClient);
+const syncPending = () => flushPending().then((n) => { if (n) void queryClient.invalidateQueries(); });
+window.addEventListener('online', syncPending);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void syncPending(); });
+void syncPending();
+// تحميل كل الصفحات مسبقاً بعد الفتح: أسرع تنقّل، وتشتغل بدون إنترنت
+window.addEventListener('load', () => setTimeout(() => {
+  void Promise.all([
+    import('./pages/Dashboard'), import('./pages/Expenses'), import('./pages/Readings'), import('./pages/Settings'),
+    import('./pages/Recurring'), import('./pages/Trips'), import('./pages/Renewals'), import('./pages/Years'), import('./pages/Messages'),
+  ]).catch(() => {});
+}, 2500));
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

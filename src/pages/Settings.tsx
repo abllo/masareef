@@ -1,8 +1,8 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
 import { toast } from 'sonner';
 import {
-  AirplaneTilt, ArrowsClockwise, BellRinging, CaretLeft, ChartBar, ChatCircleText, Copy, CreditCard, Key, Repeat,
+  AirplaneTilt, ArrowsClockwise, BellRinging, CalendarBlank, CalendarPlus, CaretLeft, ChartBar, ChatCircleText, Copy, CreditCard, Key, LockKey, Repeat,
   ShieldCheck, SignOut, Plus, Sparkle, Tag, Target, UserCircle, UserMinus, UsersThree, type Icon,
 } from '@phosphor-icons/react';
 import { AiPanel } from '../components/AiPanel';
@@ -14,8 +14,9 @@ import { useAiStatus, useCards, useCategories, useDeleteCategory, useInvalidate,
 import { usePushStatus } from '../hooks/push';
 import { useAuth } from '../hooks/auth';
 import {
-  fetchSmsToken, leaveHousehold, regenerateInviteCode, regenerateSmsToken, removeMember, translateError,
+  calendarUrl, fetchSmsToken, leaveHousehold, regenerateInviteCode, regenerateSmsToken, removeMember, setSalaryPayer, translateError,
 } from '../lib/api';
+import { amountsHidden, disableLock, enableLock, lockAvailable, lockEnabled, setAmountsHidden } from '../lib/lock';
 import { CATEGORY_COLORS, CATEGORY_ICONS, COLOR_LABELS, ICON_LABELS } from '../lib/icons';
 import { formatSAR, parseAmount, toInputValue } from '../lib/money';
 import { SUPABASE_KEY, SUPABASE_URL, supabase } from '../lib/supabase';
@@ -25,6 +26,8 @@ import type { Category } from '../lib/types';
 const SECTIONS: Record<string, { title: string; owner?: boolean; render: () => ReactNode }> = {
   account: { title: 'حسابي', render: () => <><ProfileSection /><PasswordSection /></> },
   notifications: { title: 'الإشعارات', render: () => <NotificationsCard /> },
+  privacy: { title: 'القفل والخصوصية', render: () => <PrivacySection /> },
+  calendar: { title: 'تقويم الآيفون', render: () => <CalendarSection /> },
   family: { title: 'العائلة', render: () => <FamilySection /> },
   budget: { title: 'الميزانية', render: () => <BudgetSection /> },
   categories: { title: 'التصنيفات', owner: true, render: () => <CategoriesSection /> },
@@ -99,6 +102,8 @@ function SettingsHome() {
       <Group>
         <Row to="/settings/notifications" icon={BellRinging} tone="#E11D48" title="الإشعارات"
           value={push ? (push.devices > 0 ? 'مفعّلة' : 'غير مفعّلة') : undefined} />
+        <Row to="/settings/privacy" icon={LockKey} tone="#0F172A" title="القفل والخصوصية" value={lockEnabled() ? 'Face ID' : undefined} />
+        <Row to="/settings/calendar" icon={CalendarBlank} tone="#DC2626" title="تقويم الآيفون" />
         <Row to="/settings/family" icon={UsersThree} tone="#2563EB" title="العائلة" value={`${members.length} ${members.length > 2 ? 'أفراد' : members.length === 2 ? 'فردين' : 'فرد'}`} />
         <Row to="/settings/budget" icon={Target} tone="#0E6B58" title="الميزانية الشهرية"
           value={household.monthly_budget ? formatSAR(household.monthly_budget) : 'غير محددة'} />
@@ -135,7 +140,10 @@ function SettingsHome() {
 function ProfileSection() {
   const { me } = useHousehold();
   const update = useUpdateHousehold();
+  const invalidate = useInvalidate();
   const [name, setName] = useState(me.display_name);
+  const [payer, setPayer] = useState(me.salary_payer ?? '');
+  const [savingPayer, setSavingPayer] = useState(false);
   return (
     <Card>
       <h2 className="inline-flex items-center gap-2 font-bold"><UserCircle className="size-5 text-brand" weight="duotone" />حسابي</h2>
@@ -147,6 +155,96 @@ function ProfileSection() {
         <Field label="اسمك" className="flex-1" value={name} maxLength={30} onChange={(e) => setName(e.target.value)} />
         <Button type="submit" variant="secondary" loading={update.isPending}>حفظ</Button>
       </form>
+      <form className="mt-3 flex items-end gap-2" onSubmit={async (e) => {
+        e.preventDefault();
+        setSavingPayer(true);
+        try {
+          await setSalaryPayer(payer);
+          await invalidate('household');
+          toast.success('تم الحفظ');
+        } catch (err) {
+          toast.error((err as Error).message);
+        } finally {
+          setSavingPayer(false);
+        }
+      }}>
+        <Field label="جهة الراتب" placeholder="جهة عملك" className="flex-1" value={payer} maxLength={120} onChange={(e) => setPayer(e.target.value)} />
+        <Button type="submit" variant="secondary" loading={savingPayer}>حفظ</Button>
+      </form>
+    </Card>
+  );
+}
+
+function PrivacySection() {
+  const { me } = useHousehold();
+  const { session } = useAuth();
+  const [available, setAvailable] = useState<boolean | null>(null);
+  const [locked, setLocked] = useState(lockEnabled);
+  const [hidden, setHidden] = useState(amountsHidden);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { void lockAvailable().then(setAvailable); }, []);
+
+  async function toggleLock(on: boolean) {
+    if (!on) {
+      disableLock();
+      setLocked(false);
+      return;
+    }
+    setBusy(true);
+    try {
+      await enableLock(session?.user.email ?? me.display_name);
+      setLocked(true);
+      toast.success('تم تفعيل القفل');
+    } catch (e) {
+      toast.error(e instanceof DOMException && e.name === 'NotAllowedError' ? 'تم الإلغاء' : 'تعذّر تفعيل القفل');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="space-y-2">
+      <h2 className="mb-2 inline-flex items-center gap-2 font-bold"><LockKey className="size-5 text-brand" weight="duotone" />القفل والخصوصية</h2>
+      <label className="flex items-center justify-between gap-3 rounded-2xl bg-surface-2 px-4 py-3">
+        <span>
+          <span className="block font-medium">قفل التطبيق بـ Face ID</span>
+          {available === false && <span className="text-xs text-muted">غير متاح على هذا الجهاز</span>}
+        </span>
+        <input type="checkbox" checked={locked} disabled={available === false || busy}
+          onChange={(e) => void toggleLock(e.target.checked)} className="size-5 accent-[var(--color-brand)]" />
+      </label>
+      <label className="flex items-center justify-between gap-3 rounded-2xl bg-surface-2 px-4 py-3">
+        <span className="font-medium">إخفاء المبالغ</span>
+        <input type="checkbox" checked={hidden} onChange={(e) => { setAmountsHidden(e.target.checked); setHidden(e.target.checked); }}
+          className="size-5 accent-[var(--color-brand)]" />
+      </label>
+    </Card>
+  );
+}
+
+function CalendarSection() {
+  const [url, setUrl] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function subscribe() {
+    setBusy(true);
+    try {
+      const u = url ?? (await calendarUrl());
+      setUrl(u);
+      window.location.href = u;
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Card className="space-y-3">
+      <h2 className="inline-flex items-center gap-2 font-bold"><CalendarBlank className="size-5 text-brand" weight="duotone" />تقويم الآيفون</h2>
+      <p className="text-sm text-muted">التجديدات والفواتير والمصاريف الثابتة في تقويمك.</p>
+      <Button className="w-full" loading={busy} onClick={subscribe}>
+        <CalendarPlus className="size-5" weight="bold" /> إضافة للتقويم
+      </Button>
+      {url && <CopyRow label="رابط الاشتراك" value={url} copied="تم نسخ الرابط" />}
     </Card>
   );
 }
@@ -365,9 +463,9 @@ function SmsSection() {
           <li>تطبيق <b>الاختصارات</b> ← <b>+</b> ← أضف إجراء <b>«الحصول على محتويات URL»</b>، والصق <b>الرابط</b>.</li>
           <li>اضغط السهم الأزرق: <b>الطريقة POST</b>.</li>
           <li><b>الرؤوس (Headers)</b> ← أضف رأساً: المفتاح <code dir="ltr">apikey</code> والقيمة <b>المفتاح</b>.</li>
-          <li><b>نص الطلب: JSON</b> ← أضف حقلاً نصياً <code dir="ltr">token</code> وقيمته <b>رمزك الخاص</b>، وحقلاً نصياً <code dir="ltr">message</code> واختر له <b>«مدخل الاختصار»</b> من الشريط فوق الكيبورد.</li>
+          <li><b>نص الطلب: JSON</b> ← أضف حقلاً نصياً <code dir="ltr">token</code> وقيمته <b>رمزك الخاص</b>، وحقلاً نصياً <code dir="ltr">message</code> واختر له <b>«مدخل الاختصار»</b> من الشريط فوق الكيبورد، وحقلاً نصياً <code dir="ltr">sender</code> واختر له <b>«مدخل الاختصار»</b> ثم اضغط عليه واختر <b>«المرسل»</b>.</li>
           <li>سمِّ الاختصار <b>«تسجيل مصروف»</b>.</li>
-          <li><b>التحكم التلقائي</b> ← <b>+</b> ← <b>رسالة</b> ← الرسالة تتضمن <b>شراء</b> ← إجراء «تشغيل الاختصار: تسجيل مصروف» بالمدخل <b>إدخال الاختصار</b> ← أطفئ «التأكيد قبل التشغيل».</li>
+          <li><b>التحكم التلقائي</b> ← <b>+</b> ← <b>رسالة</b> ← الرسالة تتضمن <b dir="ltr">SAR</b> ← إجراء «تشغيل الاختصار: تسجيل مصروف» بالمدخل <b>إدخال الاختصار</b> ← أطفئ «التأكيد قبل التشغيل». وكرّرها لـ <b>ريال</b> و<b>ر.س</b> و<b>تنتهي</b>.</li>
           <li>فعّل الإشعارات من الإعدادات ← الإشعارات.</li>
         </ol>
       </details>

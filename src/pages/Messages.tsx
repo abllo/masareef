@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowsClockwise, ChatCircleText, CheckCircle, Copy, LinkSimple, PlusCircle, Prohibit, Sparkle, Trash } from '@phosphor-icons/react';
+import { ArrowsClockwise, ChatCircleText, CheckCircle, Copy, HandCoins, LinkSimple, PlusCircle, Prohibit, ShieldCheck, Sparkle, Trash } from '@phosphor-icons/react';
 import { useExpenseSheet } from '../components/Layout';
 import { BackButton, Button, EmptyState, IconButton, Spinner, cx } from '../components/ui';
 import { useCanEdit } from '../hooks/household';
 import { useInvalidate, useSmsLog } from '../hooks/queries';
-import { deleteSmsLog, fetchExpense } from '../lib/api';
+import { allowSmsSender, deleteSmsLog, fetchExpense } from '../lib/api';
 import { formatDayLabel, todayISO } from '../lib/dates';
 import { formatSAR, parseAmount } from '../lib/money';
 import type { SmsLogEntry } from '../lib/types';
@@ -20,6 +20,7 @@ const STATUS: Record<SmsLogEntry['status'], { label: string; icon: typeof CheckC
   linked: { label: 'رُبطت بمصروف ثابت', icon: LinkSimple, tone: 'bg-brand-soft text-brand' },
   duplicate: { label: 'مكررة', icon: ArrowsClockwise, tone: 'bg-surface-2 text-muted' },
   ignored: { label: 'تجاهلها', icon: Prohibit, tone: 'bg-warn-soft text-warn' },
+  income: { label: 'دخل', icon: HandCoins, tone: 'bg-brand-soft text-brand' },
 };
 
 export default function Messages() {
@@ -99,7 +100,8 @@ function MessageItem({ m }: { m: SmsLogEntry }) {
   const s = STATUS[m.status];
   const r = m.result;
   const amount = r?.amount ?? (r?.fallback_amount ? parseAmount(r.fallback_amount) : null);
-  const title = r?.merchant ?? (m.status === 'ignored' ? m.reason : null) ?? 'رسالة بنك';
+  const title = r?.merchant ?? (m.status === 'income' && r?.payer ? `من ${r.payer}` : null) ?? (m.status !== 'recorded' ? m.reason : null) ?? 'رسالة بنك';
+  const blockedSender = m.status === 'ignored' && r?.sender && m.reason?.startsWith('مرسل غير معروف') ? r.sender : null;
 
   async function openExpense() {
     if (!m.expense_id) return;
@@ -118,6 +120,16 @@ function MessageItem({ m }: { m: SmsLogEntry }) {
       date: r?.date,
       categoryId: r?.category_id,
     });
+  }
+
+  async function allowSender() {
+    try {
+      await allowSmsSender(m.id);
+      await invalidate('sms-log');
+      toast.success('تم السماح لرسائل ' + blockedSender);
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
   }
 
   async function remove() {
@@ -162,6 +174,11 @@ function MessageItem({ m }: { m: SmsLogEntry }) {
       <div className="mt-2 flex items-center gap-1">
         {m.expense_id && (
           <Button variant="ghost" className="h-8 px-2 text-xs" onClick={openExpense}>فتح العملية</Button>
+        )}
+        {blockedSender && (
+          <Button variant="ghost" className="h-8 px-2 text-xs text-brand" onClick={allowSender}>
+            <ShieldCheck className="size-4" weight="bold" /> السماح لهذا المرسل
+          </Button>
         )}
         {m.status === 'ignored' && m.message && (
           <Button variant="ghost" className="h-8 px-2 text-xs text-brand" onClick={recordManually}>

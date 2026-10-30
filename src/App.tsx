@@ -7,6 +7,7 @@ import { keys } from './hooks/queries';
 import { fetchHouseholdContext } from './lib/api';
 import { isConfigured } from './lib/supabase';
 import { Layout } from './components/Layout';
+import { AppLock } from './components/AppLock';
 import { Spinner, FullScreenMessage } from './components/ui';
 import Login, { NewPassword } from './pages/Login';
 import Onboarding from './pages/Onboarding';
@@ -49,6 +50,7 @@ export default function App() {
 
   return (
     <HouseholdProvider value={household.data}>
+      <AppLock>
       <Layout>
         <Suspense fallback={<Spinner />}>
           <Routes>
@@ -67,6 +69,7 @@ export default function App() {
           </Routes>
         </Suspense>
       </Layout>
+      </AppLock>
     </HouseholdProvider>
   );
 }

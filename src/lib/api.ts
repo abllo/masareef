@@ -1,6 +1,6 @@
-import { supabase } from './supabase';
+import { SUPABASE_URL, supabase } from './supabase';
 import type {
-  AiStatus, Card, Category, CategoryAudit, CategoryPlan, Expense, Household, ISODate, Member, MerchantRule, MonthKey, MonthlyTotal, MonthReport,
+  AiStatus, Card, Category, CategoryAudit, CategoryPlan, Expense, Household, Income, ISODate, Member, MerchantRule, MonthKey, MonthlyTotal, MonthReport,
   ArchiveResult, NotifyPrefs, PlanOp, PlanResult, PushStatus, Recurring, Renewal, RenewalDraft, SmsLogEntry, SmsParseResult, Trip, YearOverview,
 } from './types';
 
@@ -113,7 +113,7 @@ export const deleteCategory = async (id: string) => check(await supabase.from('c
 
 // ---------- المصروفات ----------
 const EXPENSE_COLUMNS =
-  'id,household_id,category_id,amount,expense_date,description,receipt_path,recurring_id,recurring_period,created_by,created_at,updated_at,merchant_key,sms_meta,trip_id';
+  'id,household_id,category_id,amount,expense_date,description,receipt_path,recurring_id,recurring_period,created_by,created_at,updated_at,merchant_key,sms_meta,trip_id,kind,refund_of';
 
 export const fetchExpenses = async (householdId: string, from: ISODate, to: ISODate) =>
   check(
@@ -263,6 +263,33 @@ export const fetchCategoryAudit = async (householdId: string) =>
     await supabase.from('category_audit').select('id,batch_id,op,details,actor,created_at,undone_at')
       .eq('household_id', householdId).order('created_at', { ascending: false }).limit(100),
   ) as CategoryAudit[];
+
+// ---------- السحب النقدي ----------
+/** يقسم سحباً نقدياً على التصنيفات؛ الباقي يبقى «نقد» */
+export const splitExpense = async (id: string, parts: { amount: number; category_id: string; description?: string | null }[]) =>
+  check(await supabase.rpc('split_expense', { p_id: id, p_parts: parts })) as number;
+
+// ---------- الدخل ----------
+export const fetchIncomes = async (from: ISODate, to: ISODate) =>
+  check(
+    await supabase.from('incomes').select('id,household_id,user_id,amount,income_date,kind,payer,created_at')
+      .gte('income_date', from).lte('income_date', to).order('income_date', { ascending: false }),
+  ) as Income[];
+
+export const deleteIncome = async (id: string) => check(await supabase.from('incomes').delete().eq('id', id));
+
+export const setSalaryPayer = async (payer: string) =>
+  check(await supabase.rpc('set_salary_payer', { p: payer })) as string | null;
+
+/** مرسل ما عرفه التطبيق (بنك أو جهة): يسمح برسائله القادمة */
+export const allowSmsSender = async (logId: string) =>
+  check(await supabase.rpc('allow_sms_sender', { p_log: logId })) as string;
+
+// ---------- تقويم الآيفون ----------
+export async function calendarUrl(): Promise<string> {
+  const token = check(await supabase.rpc('my_calendar_token')) as string;
+  return `${SUPABASE_URL.replace(/^https:/, 'webcal:')}/functions/v1/push?ics=${token}`;
+}
 
 export const fetchExpense = async (id: string) =>
   check(await supabase.from('expenses').select(EXPENSE_COLUMNS).eq('id', id).maybeSingle()) as Expense | null;

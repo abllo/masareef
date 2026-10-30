@@ -1,15 +1,18 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { AirplaneTilt, CalendarCheck, CaretLeft, ChartBar, Lightning, Plus, Repeat, ShieldCheck, Warning } from '@phosphor-icons/react';
+import { AirplaneTilt, CalendarCheck, CaretLeft, ChartBar, HandCoins, Lightning, Plus, Repeat, ShieldCheck, Trash, Warning } from '@phosphor-icons/react';
+import { toast } from 'sonner';
 import { AiReportCard, InsightsCard } from '../components/Insights';
 import { Button, Card, CategoryIcon, MonthSwitcher, Spinner, cx } from '../components/ui';
 import { useIsOwner } from '../hooks/household';
-import { useCategories, useExpenses, useRecurring, useSaveRecurring } from '../hooks/queries';
+import { useCategories, useExpenses, useIncomes, useInvalidate, useRecurring, useRenewals, useSaveRecurring } from '../hooks/queries';
+import { deleteIncome } from '../lib/api';
+import { subscriptionAudit } from '../lib/subscriptions';
 import { WEEKDAYS, byWeekday, detectRecurring, firstDaysShare, habits, unusualSpending } from '../lib/behavior';
 import { addMonths, daysInMonth, formatDayShort, monthEnd, monthOf, todayISO } from '../lib/dates';
 import { formatSAR, sumHalalas } from '../lib/money';
 import { merchantLabel, splitTravel } from '../lib/stats';
-import type { Expense, MonthKey } from '../lib/types';
+import type { Expense, Income, MonthKey } from '../lib/types';
 
 /** «قراءات»: كل التحليلات في مكان واحد حتى تبقى الرئيسية خفيفة */
 export default function ReadingsPage() {
@@ -36,8 +39,9 @@ export default function ReadingsPage() {
 
       {isPending ? <Spinner /> : (
         <>
+          <IncomeCard month={month} spent={total} />
           <WhenCard list={inMonth} />
-          <RecurringCard list={regular} />
+          <SubscriptionsCard list={regular} />
           <HabitsCard list={inMonth} prev={prevMonth} days={days} categories={categories} month={month} />
           <UnusualCard list={inMonth} history={history} />
           {inMonth.length > 0 && <InsightsCard list={inMonth} total={total} month={month} today={today} />}
@@ -96,33 +100,109 @@ function WhenCard({ list }: { list: Expense[] }) {
   );
 }
 
-/** مدفوعات تتكرر كل شهر وما هي ضمن الثابتة */
-function RecurringCard({ list }: { list: Expense[] }) {
+const INCOME_LABEL: Record<Income['kind'], string> = { salary: 'راتب', transfer: 'حوالة واردة', deposit: 'إيداع', other: 'إضافة' };
+
+/** دخلك هذا الشهر (خاص بك) والفائض بعد مصاريف البيت */
+function IncomeCard({ month, spent }: { month: MonthKey; spent: number }) {
+  const { data: rows = [] } = useIncomes(month, monthEnd(month));
+  const invalidate = useInvalidate();
+  if (rows.length === 0) return null;
+  const total = sumHalalas(rows.map((r) => r.amount));
+  const salary = sumHalalas(rows.filter((r) => r.kind === 'salary').map((r) => r.amount));
+  const surplus = total - spent;
+
+  async function remove(id: string) {
+    try {
+      await deleteIncome(id);
+      await invalidate('incomes');
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  return (
+    <Card>
+      <Title icon={HandCoins}>دخلك</Title>
+      <div className="grid grid-cols-3 gap-2 text-center">
+        {[
+          ['الدخل', total, ''],
+          ['المصاريف', spent, ''],
+          [surplus >= 0 ? 'الفائض' : 'العجز', Math.abs(surplus), surplus >= 0 ? 'text-brand' : 'text-danger'],
+        ].map(([label, v, tone]) => (
+          <div key={label as string} className="min-w-0 rounded-2xl bg-surface-2 px-1.5 py-3">
+            <p className={cx('num break-words text-sm font-bold', tone as string)}>{formatSAR(v as number)}</p>
+            <p className="text-xs text-muted">{label}</p>
+          </div>
+        ))}
+      </div>
+      {total > 0 && surplus > 0 && (
+        <p className="mt-2 text-sm">نسبة الادخار <b className="num">{Math.round((surplus / total) * 100)}%</b>{salary > 0 && salary !== total && <> · الراتب {formatSAR(salary)}</>}</p>
+      )}
+      <ul className="mt-3 divide-y divide-line/70">
+        {rows.map((r) => (
+          <li key={r.id} className="flex items-center gap-2 py-2 text-sm">
+            <span className="min-w-0 flex-1 truncate">
+              <b>{INCOME_LABEL[r.kind]}</b>{r.payer && <span className="text-muted" dir="auto"> · {r.payer}</span>}
+              <span className="text-xs text-muted"> · {formatDayShort(r.income_date)}</span>
+            </span>
+            <span className="num shrink-0 font-semibold">{formatSAR(r.amount)}</span>
+            <button type="button" aria-label="حذف" onClick={() => remove(r.id)} className="shrink-0 p-1 text-muted">
+              <Trash className="size-4" weight="bold" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+/** الاشتراكات والمدفوعات المتكررة: التكلفة الشهرية والسنوية، وما زاد سعره أو تكرر نوعه */
+function SubscriptionsCard({ list }: { list: Expense[] }) {
   const isOwner = useIsOwner();
   const { data: fixed = [] } = useRecurring();
+  const { data: renewals = [] } = useRenewals();
   const { data: categories = [] } = useCategories();
   const save = useSaveRecurring();
   const [added, setAdded] = useState<Set<string>>(new Set());
   const names = new Set(fixed.map((r) => r.name.trim().toLowerCase()));
   const guesses = detectRecurring(list).filter((g) => !names.has(g.label.trim().toLowerCase()) && !added.has(g.key));
-  if (guesses.length === 0) return null;
+  const audit = useMemo(() => subscriptionAudit(guesses, list, fixed, renewals), [guesses, list, fixed, renewals]);
+  if (audit.items.length === 0) return null;
   return (
     <Card>
-      <Title icon={Repeat}>مدفوعات تتكرر كل شهر</Title>
+      <Title icon={Repeat}>الاشتراكات والمدفوعات المتكررة</Title>
+      <p className="-mt-1 mb-3 text-sm text-muted">
+        شهرياً <b className="num text-ink">{formatSAR(audit.monthly)}</b> · سنوياً <b className="num text-ink">{formatSAR(audit.yearly)}</b>
+      </p>
+      {audit.duplicates.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {audit.duplicates.map((d) => (
+            <span key={d.label} className="rounded-full bg-warn-soft px-2.5 py-1 text-xs font-semibold text-warn">{d.count} اشتراكات {d.label}</span>
+          ))}
+        </div>
+      )}
       <ul className="space-y-2">
-        {guesses.map((g) => (
-          <li key={g.key} className="flex items-center gap-3 rounded-2xl bg-surface-2 px-3 py-2.5">
-            <CategoryIcon category={categories.find((c) => c.id === g.categoryId)} size="sm" />
+        {audit.items.map((i) => (
+          <li key={i.key} className="flex items-center gap-3 rounded-2xl bg-surface-2 px-3 py-2.5">
+            <CategoryIcon category={categories.find((c) => c.id === i.categoryId)} size="sm" />
             <span className="min-w-0 flex-1">
-              <span className="block truncate font-semibold" dir="auto">{g.label}</span>
-              <span className="text-xs text-muted">{formatSAR(g.typical)} · {g.months} أشهر · آخرها {formatDayShort(g.lastDate)}</span>
+              <span className="flex items-center gap-1.5">
+                <span className="truncate font-semibold" dir="auto">{i.name}</span>
+                {i.increased && <span className="shrink-0 rounded-full bg-danger-soft px-2 py-0.5 text-[10px] font-semibold text-danger">زاد السعر</span>}
+                {i.source === 'fixed' && <span className="shrink-0 rounded-full bg-brand-soft px-2 py-0.5 text-[10px] font-semibold text-brand">ثابت</span>}
+                {i.source === 'renewal' && <span className="shrink-0 rounded-full bg-brand-soft px-2 py-0.5 text-[10px] font-semibold text-brand">سنوي</span>}
+              </span>
+              <span className="text-xs text-muted">{formatSAR(i.monthly)} شهرياً · {formatSAR(i.yearly)} سنوياً</span>
             </span>
-            {isOwner && (
+            {isOwner && i.guess && (
               <Button variant="secondary" className="h-9 shrink-0 px-3 text-xs" loading={save.isPending}
-                onClick={() => save.mutate(
-                  { input: { name: g.label.slice(0, 60), amount: g.typical, category_id: g.categoryId, day_of_month: Number(g.lastDate.slice(8, 10)), is_active: true } },
-                  { onSuccess: () => setAdded((s) => new Set(s).add(g.key)) },
-                )}>
+                onClick={() => {
+                  const g = i.guess!;
+                  save.mutate(
+                    { input: { name: g.label.slice(0, 60), amount: g.typical, category_id: g.categoryId, day_of_month: Number(g.lastDate.slice(8, 10)), is_active: true } },
+                    { onSuccess: () => setAdded((s) => new Set(s).add(g.key)) },
+                  );
+                }}>
                 <Plus className="size-4" weight="bold" /> للثابتة
               </Button>
             )}

@@ -33,6 +33,8 @@ export interface Member {
   user_id: string;
   display_name: string;
   role: 'owner' | 'member';
+  /** جهة الراتب (مثل جهة العمل): أي إيداع منها يُحسب راتباً */
+  salary_payer?: string | null;
 }
 
 export interface Category {
@@ -66,7 +68,12 @@ export interface Expense {
   sms_meta: SmsMeta | null;
   /** الرحلة التابع لها (مصاريف السفر منفصلة عن مصروف الشهر) */
   trip_id?: string | null;
+  /** شراء، استرداد (مبلغ سالب مربوط بالعملية الأصلية)، أو سحب نقدي */
+  kind?: ExpenseKind;
+  refund_of?: string | null;
 }
+
+export type ExpenseKind = 'purchase' | 'refund' | 'cash';
 
 export type PaymentMethod = 'mada' | 'credit_card' | 'apple_pay' | 'online' | 'bill_payment' | 'other';
 
@@ -99,10 +106,20 @@ export interface SmsMeta {
   /** دولة الشراء (ISO) */
   country?: string;
   international?: boolean;
+  /** حوالة صادرة سُجّلت كدفعة مصروف ثابت */
+  transfer?: boolean;
+  /** جزء من سحب نقدي بعد تقسيمه */
+  from_cash?: string;
+  split_at?: string;
 }
 
 export interface SmsParseResult {
-  status: 'ok' | 'ignored';
+  status: 'ok' | 'ignored' | 'income';
+  kind?: 'purchase' | 'refund' | 'cash' | 'transfer' | 'income';
+  payer?: string;
+  income_kind?: IncomeKind;
+  sender?: string;
+  silent?: boolean;
   reason?: string;
   source?: 'ai' | 'rules';
   amount?: Halalas;
@@ -122,10 +139,11 @@ export interface SmsLogEntry {
   user_id: string | null;
   received_at: string;
   message: string | null;
-  status: 'recorded' | 'ignored' | 'duplicate' | 'linked';
+  status: 'recorded' | 'ignored' | 'duplicate' | 'linked' | 'income';
   reason: string | null;
   source: 'ai' | 'rules' | null;
   expense_id: string | null;
+  income_id?: string | null;
   result: SmsParseResult | null;
 }
 
@@ -197,7 +215,7 @@ export interface MonthlyTotal {
 }
 
 // ---------- الإشعارات ----------
-export type NotifyKey = 'self' | 'family' | 'budget' | 'recurring' | 'monthly' | 'sms_issue' | 'travel' | 'renewals';
+export type NotifyKey = 'self' | 'family' | 'budget' | 'recurring' | 'monthly' | 'sms_issue' | 'travel' | 'renewals' | 'income';
 export type NotifyPrefs = Record<NotifyKey, boolean>;
 export interface PushStatus { prefs: NotifyPrefs; devices: number; public_key: string | null }
 
@@ -247,7 +265,7 @@ export interface ArchiveResult { year: number; deleted: number; total: Halalas; 
 
 // ---------- التجديدات والضمانات ----------
 export type RenewalKind = 'insurance' | 'istimara' | 'license' | 'passport' | 'iqama' | 'national_id' | 'warranty'
-  | 'subscription' | 'contract' | 'rent' | 'school' | 'other';
+  | 'subscription' | 'contract' | 'rent' | 'school' | 'bill' | 'other';
 export interface Renewal {
   id: string;
   household_id: string;
@@ -272,4 +290,17 @@ export interface RenewalDraft {
   period_months?: number | null;
   amount_sar?: number | null;
   confidence?: number;
+}
+
+// ---------- الدخل ----------
+export type IncomeKind = 'salary' | 'transfer' | 'deposit' | 'other';
+export interface Income {
+  id: string;
+  household_id: string;
+  user_id: string;
+  amount: Halalas;
+  income_date: ISODate;
+  kind: IncomeKind;
+  payer: string | null;
+  created_at: string;
 }

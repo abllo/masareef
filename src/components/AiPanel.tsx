@@ -138,9 +138,12 @@ function ParseResultView({ result }: { result: SmsParseResult }) {
       </div>
     );
   }
+  const KIND: Record<string, string> = { purchase: 'شراء', refund: 'استرداد', cash: 'سحب نقدي', transfer: 'حوالة صادرة', income: 'دخل' };
+  const INCOME: Record<string, string> = { salary: 'راتب', transfer: 'حوالة واردة', deposit: 'إيداع', other: 'إضافة' };
   const rows: [string, string | undefined][] = [
+    ['النوع', result.status === 'income' ? INCOME[result.income_kind ?? 'other'] : KIND[result.kind ?? 'purchase']],
     ['المبلغ', result.amount != null ? `${m?.approx ? '≈ ' : ''}${formatSAR(result.amount)}` : undefined],
-    ['المتجر', result.merchant],
+    [result.status === 'income' ? 'من' : result.kind === 'transfer' ? 'إلى' : 'المتجر', result.status === 'income' ? result.payer : result.merchant],
     ['التصنيف', m?.new_category ? `«${m.new_category}» (تصنيف جديد بيُنشأ)` : result.category_name],
     ['التاريخ', result.date && formatDayShort(result.date)],
     ['البنك', bankLabel(m?.bank) ?? undefined],

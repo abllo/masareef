@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import { useQueryClient } from '@tanstack/react-query';
+import { clearOfflineData } from '../lib/offline';
 import { supabase } from '../lib/supabase';
 
 interface AuthState {
@@ -16,6 +18,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [recovery, setRecovery] = useState(false);
+  const qc = useQueryClient();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -26,10 +29,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(s);
       setLoading(false);
       if (event === 'PASSWORD_RECOVERY') setRecovery(true);
-      if (event === 'SIGNED_OUT') setRecovery(false);
+      if (event === 'SIGNED_OUT') {
+        setRecovery(false);
+        clearOfflineData();
+        qc.clear();
+      }
     });
     return () => data.subscription.unsubscribe();
-  }, []);
+  }, [qc]);
 
   return (
     <AuthContext.Provider value={{ session, loading, recovery, endRecovery: () => setRecovery(false) }}>

@@ -1,6 +1,6 @@
 import {
   AirplaneTilt, Baby, Barbell, BookOpen, Broom, Car, Coffee, DeviceMobile, DotsThreeCircle, Drop, ForkKnife,
-  GasPump, Gift, GraduationCap, HandCoins, Heartbeat, House, Lightning, PawPrint, Pill, Receipt, Scooter,
+  GasPump, Gift, GraduationCap, HandCoins, Heartbeat, House, Lightning, Money, PawPrint, Pill, Receipt, Scooter,
   ShoppingBag, ShoppingCart, Sparkle, SteeringWheel, TShirt, Television, WifiHigh, Wrench,
   type Icon,
 } from '@phosphor-icons/react';
@@ -36,6 +36,7 @@ export const CATEGORY_ICONS: Record<string, Icon> = {
   pet: PawPrint,
   repair: Wrench,
   charity: HandCoins,
+  cash: Money,
   circle: DotsThreeCircle,
 };
 
@@ -52,7 +53,7 @@ export const ICON_LABELS: Record<string, string> = {
   car: 'سيارة', fuel: 'وقود', broom: 'تنظيف', steering: 'سائق', home: 'بيت', power: 'كهرباء', water: 'ماء',
   wifi: 'إنترنت', phone: 'جوال', tv: 'تلفزيون', health: 'صحة', pill: 'دواء', school: 'دراسة', books: 'كتب',
   baby: 'أطفال', gift: 'هدية', clothes: 'ملابس', beauty: 'تجميل', travel: 'سفر', sport: 'رياضة', pet: 'حيوان أليف',
-  repair: 'صيانة', charity: 'صدقة', circle: 'أخرى',
+  repair: 'صيانة', charity: 'صدقة', cash: 'نقد', circle: 'أخرى',
 };
 
 export const COLOR_LABELS: Record<string, string> = {

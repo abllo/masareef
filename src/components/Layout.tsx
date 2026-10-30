@@ -1,9 +1,11 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
-import { NavLink } from 'react-router';
-import { AirplaneTilt, ChartBar, ChartLineUp, GearSix, House, ListBullets, Plus, Repeat, ShieldCheck, type Icon } from '@phosphor-icons/react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { NavLink, useSearchParams } from 'react-router';
+import { AirplaneTilt, ChartBar, ChartLineUp, CloudSlash, GearSix, House, ListBullets, Plus, Repeat, ShieldCheck, type Icon } from '@phosphor-icons/react';
 import { useHousehold } from '../hooks/household';
 import { useRealtimeSync } from '../hooks/realtime';
 import { usePushRefresh } from '../hooks/push';
+import { fetchExpense } from '../lib/api';
+import { isOffline, onPendingChange, pendingExpenses } from '../lib/offline';
 import type { Expense } from '../lib/types';
 import { cx } from './ui';
 import { ExpenseSheet } from './ExpenseSheet';
@@ -38,6 +40,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
   const [state, setState] = useState<{ open: boolean; expense?: Expense; draft?: ExpenseDraft }>({ open: false });
   const open = useCallback((expense?: Expense, draft?: ExpenseDraft) => setState({ open: true, expense, draft }), []);
+  useOpenFromLink(open);
 
   return (
     <SheetCtx.Provider value={open}>
@@ -66,7 +69,10 @@ export function Layout({ children }: { children: ReactNode }) {
           ))}
         </aside>
 
-        <main className="pt-safe min-w-0 flex-1 px-4 pb-36 md:px-8 md:pb-12">{children}</main>
+        <main className="pt-safe min-w-0 flex-1 px-4 pb-36 md:px-8 md:pb-12">
+          <OfflineBar />
+          {children}
+        </main>
       </div>
 
       {/* شريط سفلي للجوال مع زر الإضافة في المنتصف */}
@@ -91,6 +97,39 @@ export function Layout({ children }: { children: ReactNode }) {
       />
     </SheetCtx.Provider>
   );
+}
+
+/** بدون إنترنت، أو فيه مصاريف محفوظة بالجهاز بانتظار الرفع */
+function OfflineBar() {
+  const [state, setState] = useState(() => ({ offline: isOffline(), pending: pendingExpenses().length }));
+  useEffect(() => {
+    const update = () => setState({ offline: isOffline(), pending: pendingExpenses().length });
+    const off = onPendingChange(update);
+    window.addEventListener('online', update);
+    window.addEventListener('offline', update);
+    return () => { off(); window.removeEventListener('online', update); window.removeEventListener('offline', update); };
+  }, []);
+  if (!state.offline && state.pending === 0) return null;
+  return (
+    <div className="mt-3 flex items-center justify-center gap-1.5 rounded-full bg-surface-2 px-3 py-1.5 text-xs font-semibold text-muted">
+      <CloudSlash className="size-4" weight="bold" />
+      {state.offline ? 'بدون إنترنت' : 'جارٍ الرفع'}
+      {state.pending > 0 && ` · ${state.pending} بانتظار الرفع`}
+    </div>
+  );
+}
+
+/** الضغط على إشعار العملية يفتحها مباشرة: ‎?open=<id>‎ في أي صفحة */
+function useOpenFromLink(open: (expense?: Expense) => void) {
+  const [params, setParams] = useSearchParams();
+  const id = params.get('open');
+  const handled = useRef<string | null>(null);
+  useEffect(() => {
+    if (!id || handled.current === id) return;
+    handled.current = id;
+    fetchExpense(id).then((e) => { if (e) open(e); }).catch(() => {});
+    setParams((p) => { p.delete('open'); return p; }, { replace: true });
+  }, [id, open, setParams]);
 }
 
 function MobileLink({ to, label, icon: NavIcon, end }: (typeof NAV)[number]) {

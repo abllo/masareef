@@ -4,6 +4,7 @@ import { Button, Field } from '../components/ui';
 import { Logo } from '../components/Logo';
 import { translateError } from '../lib/api';
 import { supabase } from '../lib/supabase';
+import { markUnlocked } from '../lib/lock';
 
 /** رابط الموقع بدون أي #مسار، تعود إليه روابط الإيميل */
 const siteUrl = () => window.location.href.split('#')[0]!;
@@ -23,6 +24,7 @@ export default function Login() {
       : await supabase.auth.signUp({ email, password, options: { emailRedirectTo: siteUrl() } });
     setLoading(false);
     if (error) return toast.error(translateError(error.message));
+    if (data.session) markUnlocked();
     if (mode === 'signup' && !data.session) toast.success('أرسلنا رابط التأكيد إلى بريدك، افتحه ثم سجّل الدخول');
   }
 

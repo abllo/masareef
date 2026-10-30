@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { AirplaneTilt, Alarm, CaretLeft, ChartPieSlice, Receipt, ShieldCheck, Target, TrendDown, TrendUp } from '@phosphor-icons/react';
+import { AirplaneTilt, Alarm, CaretLeft, ChartPieSlice, Eye, EyeSlash, Receipt, ShieldCheck, Target, TrendDown, TrendUp } from '@phosphor-icons/react';
+import { amountsHidden, setAmountsHidden } from '../lib/lock';
 import { CategoryDonut, MonthlyBars } from '../components/Charts';
 import { ExpenseRow } from '../components/ExpenseList';
 import { PushPrompt } from '../components/Notifications';
@@ -68,7 +69,10 @@ export default function Dashboard() {
         <div className="pointer-events-none absolute -bottom-20 left-16 size-40 rounded-full bg-white/5" />
 
         <div className="relative">
-          <p className="text-sm text-white/75">مصروف {formatMonth(month)}</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm text-white/75">مصروف {formatMonth(month)}</p>
+            <HideAmounts />
+          </div>
           <AnimatedAmount value={total} className="mt-1 block text-4xl font-bold tracking-tight md:text-5xl" />
           {change !== null && (
             <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-white/12 px-2.5 py-1 text-xs font-medium">
@@ -216,5 +220,22 @@ export default function Dashboard() {
         </div>
       )}
     </div>
+  );
+}
+
+/** زر العين: يخفي المبالغ أمام الناس */
+function HideAmounts() {
+  const [hidden, setHidden] = useState(amountsHidden);
+  useEffect(() => {
+    const sync = () => setHidden(amountsHidden());
+    window.addEventListener('masareef-hide', sync);
+    return () => window.removeEventListener('masareef-hide', sync);
+  }, []);
+  return (
+    <button type="button" aria-label={hidden ? 'إظهار المبالغ' : 'إخفاء المبالغ'} aria-pressed={hidden}
+      onClick={() => setAmountsHidden(!hidden)}
+      className="-my-1.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-white/12 text-white/85 transition active:scale-95">
+      {hidden ? <EyeSlash className="size-5" weight="bold" /> : <Eye className="size-5" weight="bold" />}
+    </button>
   );
 }

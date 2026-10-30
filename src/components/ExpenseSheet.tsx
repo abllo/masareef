@@ -1,11 +1,11 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
-import { AirplaneTilt, ArrowSquareOut, Camera, ChatCircleText, CheckCircle, Receipt as ReceiptIcon, ShieldCheck, Trash } from '@phosphor-icons/react';
+import { AirplaneTilt, ArrowSquareOut, Camera, ChatCircleText, CheckCircle, Plus, Receipt as ReceiptIcon, ShieldCheck, Trash, X } from '@phosphor-icons/react';
 import { useNavigate } from 'react-router';
-import { useCards, useCategories, useDeleteExpense, useSaveExpense, useTrips } from '../hooks/queries';
+import { EXPENSE_DEPENDENT, useCards, useCategories, useDeleteExpense, useInvalidate, useSaveExpense, useTrips } from '../hooks/queries';
 import { countryName, flag } from '../lib/countries';
 import { useCanEdit, useHousehold, useMemberName } from '../hooks/household';
-import { receiptUrl } from '../lib/api';
+import { receiptUrl, splitExpense } from '../lib/api';
 import { addDays, formatDayLabel, todayISO } from '../lib/dates';
 import { formatSAR, parseAmount, toInputValue } from '../lib/money';
 import { cardLabel, channelLabel, fxLabel } from '../lib/stats';
@@ -17,7 +17,8 @@ export function ExpenseSheet({ open, onOpenChange, expense, draft }: {
   open: boolean; onOpenChange: (o: boolean) => void; expense?: Expense; draft?: ExpenseDraft;
 }) {
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} title={expense ? 'تعديل المصروف' : 'مصروف جديد'}>
+    <Sheet open={open} onOpenChange={onOpenChange}
+      title={!expense ? 'مصروف جديد' : expense.kind === 'refund' ? 'استرداد' : expense.kind === 'cash' ? 'سحب نقدي' : 'تعديل المصروف'}>
       <ExpenseForm key={expense?.id ?? `new-${draft?.description ?? ''}-${draft?.amount ?? ''}`} expense={expense} draft={draft}
         onDone={() => onOpenChange(false)} />
     </Sheet>
@@ -32,6 +33,8 @@ function SmsDetails({ expense }: { expense: Expense }) {
   const cardMap = new Map(cards.map((c) => [c.card_last4, c]));
   const fx = fxLabel(meta);
   const parts = [
+    expense.kind === 'refund' && 'استرداد',
+    meta.transfer && 'حوالة',
     meta.country && meta.country !== 'SA' && `${flag(meta.country)} ${countryName(meta.country)}`,
     cardLabel(meta, cardMap),
     channelLabel(meta),
@@ -59,8 +62,9 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
   const readOnly = Boolean(expense && !canEdit(expense.created_by));
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const isRefund = expense?.kind === 'refund';
   const [amountText, setAmountText] = useState(
-    expense ? toInputValue(expense.amount) : draft?.amount ? toInputValue(draft.amount) : '');
+    expense ? toInputValue(Math.abs(expense.amount)) : draft?.amount ? toInputValue(draft.amount) : '');
   const [categoryId, setCategoryId] = useState(expense?.category_id ?? draft?.categoryId ?? '');
   const [date, setDate] = useState(expense?.expense_date ?? draft?.date ?? today);
   const [description, setDescription] = useState(expense?.description ?? draft?.description ?? '');
@@ -90,10 +94,10 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
     const saved = await save.mutateAsync({
       id: expense?.id,
       receipt,
-      input: { amount, category_id: categoryId, expense_date: date, description: description.trim() || null, trip_id: tripId || null },
+      input: { amount: isRefund ? -amount : amount, category_id: categoryId, expense_date: date, description: description.trim() || null, trip_id: tripId || null },
     }).catch(() => null);
     if (!saved) return;
-    toast.success(expense ? 'تم حفظ التعديل' : `تمت إضافة ${formatSAR(amount)}`);
+    toast.success(expense ? 'تم حفظ التعديل' : saved.pending ? `انحفظ ${formatSAR(amount)}، ويرتفع أول ما يرجع الإنترنت` : `تمت إضافة ${formatSAR(amount)}`);
     onDone();
   }
 
@@ -138,6 +142,7 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
           />
           <span className="text-lg font-semibold text-muted">ر.س</span>
         </div>
+        {isRefund && <span className="mt-1 block text-sm font-semibold text-brand">مبلغ مسترد</span>}
       </label>
 
       <fieldset>
@@ -223,6 +228,8 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
         </div>
       )}
 
+      {expense?.kind === 'cash' && !readOnly && expense.amount > 0 && <CashSplit expense={expense} onDone={onDone} />}
+
       {readOnly ? (
         <p className="rounded-2xl bg-surface-2 px-4 py-3 text-sm text-muted">
           أضافها {memberName(expense!.created_by)}
@@ -244,5 +251,69 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
         <p className="text-xs text-muted">دفعة مصروف ثابت</p>
       )}
     </form>
+  );
+}
+
+/** السحب النقدي: توزيعه على التصنيفات، والباقي يبقى «نقد» */
+function CashSplit({ expense, onDone }: { expense: Expense; onDone: () => void }) {
+  const { data: categories = [] } = useCategories();
+  const invalidate = useInvalidate();
+  const [rows, setRows] = useState<{ amount: string; categoryId: string; description: string }[]>(
+    [{ amount: '', categoryId: '', description: '' }]);
+  const [busy, setBusy] = useState(false);
+  const options = categories.filter((c) => !c.is_archived && c.icon !== 'cash');
+  const parts = rows.map((r) => ({ amount: parseAmount(r.amount) ?? 0, category_id: r.categoryId, description: r.description.trim() || null }))
+    .filter((p) => p.amount > 0 && p.category_id);
+  const used = parts.reduce((a, p) => a + p.amount, 0);
+  const left = expense.amount - used;
+  const set = (i: number, patch: Partial<(typeof rows)[number]>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+
+  async function save() {
+    if (!parts.length) return toast.error('أدخل مبلغاً وتصنيفاً');
+    if (left < 0) return toast.error('المجموع أكبر من المبلغ المسحوب');
+    setBusy(true);
+    try {
+      await splitExpense(expense.id, parts);
+      await invalidate(...EXPENSE_DEPENDENT);
+      toast.success(left === 0 ? 'تم توزيع المبلغ' : `تم التوزيع، والباقي ${formatSAR(left)} نقد`);
+      onDone();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="space-y-2 rounded-2xl border border-line p-3">
+      <div className="flex items-center justify-between text-sm">
+        <h3 className="font-bold">وش صرفت منها؟</h3>
+        <span className={cx('num font-semibold', left < 0 ? 'text-danger' : 'text-muted')}>الباقي {formatSAR(left)}</span>
+      </div>
+      {rows.map((r, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <input inputMode="decimal" dir="ltr" placeholder="0" value={r.amount} aria-label="المبلغ"
+            onChange={(e) => set(i, { amount: e.target.value })}
+            className="num h-12 w-24 shrink-0 rounded-2xl border border-line bg-surface px-3 text-center text-base outline-none focus:border-brand" />
+          <div className="min-w-0 flex-1">
+            <Select label="التصنيف" value={r.categoryId} onChange={(v) => set(i, { categoryId: v })}
+              options={[{ value: '', label: 'التصنيف', disabled: true }, ...options.map((c) => ({ value: c.id, label: c.name }))]} />
+          </div>
+          {rows.length > 1 && (
+            <button type="button" aria-label="حذف البند" onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}
+              className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted">
+              <X className="size-4" weight="bold" />
+            </button>
+          )}
+        </div>
+      ))}
+      <div className="flex gap-2">
+        <Button type="button" variant="ghost" className="h-10 px-3 text-sm"
+          onClick={() => setRows((rs) => [...rs, { amount: '', categoryId: '', description: '' }])}>
+          <Plus className="size-4" weight="bold" /> بند
+        </Button>
+        <Button type="button" variant="secondary" className="h-10 flex-1 text-sm" loading={busy} onClick={save}>حفظ التوزيع</Button>
+      </div>
+    </section>
   );
 }

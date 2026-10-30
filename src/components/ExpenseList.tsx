@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { AirplaneTilt, ChatCircleText, FileText, Paperclip, Repeat, Trash } from '@phosphor-icons/react';
+import { AirplaneTilt, ArrowUUpLeft, ChatCircleText, FileText, Money, Paperclip, Repeat, Trash } from '@phosphor-icons/react';
 import { flag } from '../lib/countries';
 import { useCanEdit, useMemberName } from '../hooks/household';
 import { useDeleteWithUndo } from '../hooks/queries';
@@ -9,7 +9,7 @@ import { formatSAR } from '../lib/money';
 import { groupByDay } from '../lib/stats';
 import type { Category, Expense } from '../lib/types';
 import { useExpenseSheet } from './Layout';
-import { CategoryIcon } from './ui';
+import { CategoryIcon, cx } from './ui';
 
 const ACTION_WIDTH = 84; // عرض زر الحذف
 let closeOpenRow: (() => void) | null = null; // صف واحد مفتوح في كل مرة
@@ -130,10 +130,12 @@ function ExpenseRowButton({ expense, category }: { expense: Expense; category?: 
           {expense.description?.startsWith('📩') && <ChatCircleText className="size-3.5" weight="bold" aria-label="من رسالة البنك" />}
           {expense.description?.startsWith('🧾') && <FileText className="size-3.5" weight="bold" aria-label="من كشف الحساب" />}
           {expense.trip_id && <AirplaneTilt className="size-3.5 text-brand" weight="bold" aria-label="مصروف رحلة" />}
+          {expense.kind === 'refund' && <ArrowUUpLeft className="size-3.5 text-brand" weight="bold" aria-label="استرداد" />}
+          {expense.kind === 'cash' && <Money className="size-3.5" weight="bold" aria-label="سحب نقدي" />}
           {expense.sms_meta?.country && expense.sms_meta.country !== 'SA' && <span aria-hidden>{flag(expense.sms_meta.country)}</span>}
         </span>
       </span>
-      <span className="num shrink-0 font-semibold">{formatSAR(expense.amount)}</span>
+      <span className={cx('num shrink-0 font-semibold', expense.amount < 0 && 'text-brand')}>{formatSAR(expense.amount)}</span>
     </button>
   );
 }

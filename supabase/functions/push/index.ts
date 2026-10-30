@@ -3,6 +3,7 @@
 // تُنادى من:
 //   - قاعدة البيانات بعد كل مصروف / رسالة بنك متجاهَلة / يومياً  ← { secret, kind, id }
 //   - التطبيق (بحساب المستخدم)                                   ← { action: 'init' | 'test' }
+//   - تقويم الآيفون (GET ?ics=رمز التقويم)                         ← ملف ICS للتجديدات والمصاريف الثابتة
 // مفاتيح VAPID تُولَّد هنا أول مرة وتُحفظ في push_config (لا يراها أحد).
 
 const env = (k: string): string =>
@@ -166,8 +167,25 @@ async function deliver(messages: PushMessage[], cfg: Config & { vapid_public: st
   return { sent, failed };
 }
 
+/** اشتراك تقويم الآيفون: الرمز سري لكل مستخدم ويعطي قراءة المواعيد فقط */
+export async function calendar(req: Request): Promise<Response> {
+  const token = new URL(req.url).searchParams.get('ics') ?? '';
+  const notFound = () => new Response('not found', { status: 404 });
+  if (!/^[0-9a-f]{64}$/.test(token)) return notFound();
+  const ics = await rpc<string | null>('calendar_ics', { p_token: token }).catch(() => null);
+  if (!ics) return notFound();
+  return new Response(ics, {
+    headers: {
+      'Content-Type': 'text/calendar; charset=utf-8',
+      'Content-Disposition': 'inline; filename="masareef.ics"',
+      'Cache-Control': 'no-cache',
+    },
+  });
+}
+
 export async function handle(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+  if (req.method === 'GET') return calendar(req);
   if (req.method !== 'POST') return json({ error: 'method' }, 405);
   try {
     const body = (await req.json().catch(() => ({}))) as { action?: string; secret?: string; kind?: string; id?: string };

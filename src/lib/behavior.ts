@@ -1,7 +1,9 @@
 import { merchantLabel } from './stats';
 import type { Category, Expense, Halalas, ISODate } from './types';
 
-const keyOf = (e: Expense) => e.merchant_key ?? (e.description ? e.description.replace(/^[📩🧾]\s*/u, '').trim().toLowerCase() : null);
+/** الاسترداد والسحب النقدي لا يدخلون في قراءة السلوك */
+const spend = (e: Expense) => e.amount > 0 && e.kind !== 'cash';
+export const keyOf = (e: Expense) => e.merchant_key ?? (e.description ? e.description.replace(/^[📩🧾]\s*/u, '').trim().toLowerCase() : null);
 
 function median(values: readonly number[]): number {
   const s = [...values].sort((a, b) => a - b);
@@ -18,7 +20,7 @@ export interface RecurringGuess { key: string; label: string; months: number; ty
 export function detectRecurring(expenses: readonly Expense[]): RecurringGuess[] {
   const groups = new Map<string, Expense[]>();
   for (const e of expenses) {
-    if (e.recurring_id || e.trip_id) continue;
+    if (e.recurring_id || e.trip_id || !spend(e)) continue;
     const k = keyOf(e);
     if (!k) continue;
     groups.set(k, [...(groups.get(k) ?? []), e]);
@@ -42,7 +44,7 @@ export function habits(month: readonly Expense[], previous: readonly Expense[], 
   const count = (list: readonly Expense[]) => {
     const m = new Map<string, { n: number; total: number }>();
     for (const e of list) {
-      if (e.recurring_id) continue;
+      if (e.recurring_id || !spend(e)) continue;
       const c = m.get(e.category_id) ?? { n: 0, total: 0 };
       c.n += 1;
       c.total += e.amount;
@@ -69,7 +71,7 @@ export const WEEKDAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'ا
 export function byWeekday(list: readonly Expense[]): { day: number; total: Halalas; count: number }[] {
   const rows = WEEKDAYS.map((_, day) => ({ day, total: 0, count: 0 }));
   for (const e of list) {
-    if (e.recurring_id) continue;
+    if (e.recurring_id || !spend(e)) continue;
     const d = new Date(`${e.expense_date}T00:00:00Z`).getUTCDay();
     rows[d]!.total += e.amount;
     rows[d]!.count += 1;
@@ -79,7 +81,7 @@ export function byWeekday(list: readonly Expense[]): { day: number; total: Halal
 
 /** نسبة صرف أول 10 أيام من الشهر (بعد الراتب غالباً) */
 export function firstDaysShare(list: readonly Expense[]): number | null {
-  const items = list.filter((e) => !e.recurring_id);
+  const items = list.filter((e) => !e.recurring_id && spend(e));
   const total = items.reduce((a, e) => a + e.amount, 0);
   if (!total) return null;
   const early = items.filter((e) => Number(e.expense_date.slice(8, 10)) <= 10).reduce((a, e) => a + e.amount, 0);
@@ -92,11 +94,13 @@ export interface Unusual { expense: Expense; usual: Halalas; ratio: number }
 export function unusualSpending(month: readonly Expense[], history: readonly Expense[]): Unusual[] {
   const past = new Map<string, number[]>();
   for (const e of history) {
+    if (!spend(e)) continue;
     const k = keyOf(e);
     if (k) past.set(k, [...(past.get(k) ?? []), e.amount]);
   }
   const out: Unusual[] = [];
   for (const e of month) {
+    if (!spend(e)) continue;
     const k = keyOf(e);
     if (!k) continue;
     const prev = past.get(k) ?? [];
