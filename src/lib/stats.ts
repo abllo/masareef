@@ -158,9 +158,9 @@ export const PAYMENT_LABELS: Record<string, string> = {
 };
 
 export const BANK_LABELS: Record<string, string> = {
-  alrajhi: 'الراجحي', alinma: 'الإنماء', snb: 'الأهلي', riyad: 'الرياض', sab: 'ساب', anb: 'العربي',
+  alrajhi: 'الراجحي', alinma: 'الإنماء', snb: 'الأهلي', riyad: 'الرياض', sab: 'الأول (ساب)', anb: 'العربي',
   albilad: 'البلاد', aljazira: 'الجزيرة', bsf: 'الفرنسي', saib: 'الاستثمار', gib: 'ميم (الخليج الدولي)',
-  stcbank: 'STC Bank', barq: 'برق', urpay: 'urpay', d360: 'D360', vision: 'Vision Bank', other: 'بنك آخر',
+  stcbank: 'STC Bank', barq: 'برق', urpay: 'urpay', d360: 'D360', vision: 'Vision Bank', mobilypay: 'Mobily Pay', other: 'بنك آخر',
 };
 export const bankLabel = (code?: string | null) => (code ? BANK_LABELS[code] ?? code : null);
 
