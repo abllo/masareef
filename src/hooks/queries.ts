@@ -91,6 +91,11 @@ export function useRules() {
   return useQuery({ queryKey: keys.rules(household.id), queryFn: () => api.fetchRules(household.id) });
 }
 
+export function useIgnoredMerchants() {
+  const { household } = useHousehold();
+  return useQuery({ queryKey: ['ignored-merchants', household.id], queryFn: () => api.fetchIgnoredMerchants(household.id) });
+}
+
 export function useAiStatus() {
   const { household } = useHousehold();
   return useQuery({ queryKey: keys.aiStatus(household.id), queryFn: api.fetchAiStatus, staleTime: 60_000 });

@@ -247,7 +247,7 @@ export function fxLabel(meta: SmsMeta | null | undefined): string | null {
   if (!meta?.original_currency || !meta.original_amount) return null;
   const base = `${meta.original_amount} ${meta.original_currency}`;
   if (!meta.fx_rate) return base;
-  const src = meta.fx_source === 'peg' ? 'سعر الربط الثابت' : 'سعر صرف اليوم';
+  const src = meta.fx_source === 'peg' ? 'سعر الربط الثابت' : meta.fx_source === 'bank' ? 'سعر البنك' : 'سعر صرف اليوم';
   const fee = meta.fx_fee_pct ? ` + رسوم ${meta.fx_fee_pct}%` : '';
   return `${base} × ${Number(meta.fx_rate).toFixed(4)} (${src})${fee}`;
 }

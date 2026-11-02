@@ -5,8 +5,8 @@ import {
   ArrowCounterClockwise, CaretLeft, ChatCircleText, CheckCircle, MagicWand, Sparkle, Trash, WarningCircle,
 } from '@phosphor-icons/react';
 import { useHousehold, useIsOwner } from '../hooks/household';
-import { CATEGORY_DEPENDENT, useAiStatus, useCategories, useCategoryAudit, useInvalidate, useRules } from '../hooks/queries';
-import { applyCategoryPlan, deleteRule, previewSms, requestCategoryPlan, undoCategoryBatch } from '../lib/api';
+import { CATEGORY_DEPENDENT, useAiStatus, useCategories, useCategoryAudit, useIgnoredMerchants, useInvalidate, useRules } from '../hooks/queries';
+import { applyCategoryPlan, deleteRule, previewSms, requestCategoryPlan, undoCategoryBatch, unignoreMerchant } from '../lib/api';
 import { formatDayShort } from '../lib/dates';
 import { formatSAR } from '../lib/money';
 import { bankLabel, cardLabel, channelLabel, fxLabel } from '../lib/stats';
@@ -51,6 +51,7 @@ export function AiPanel() {
       <SmsTester />
       {isOwner && <CategoryOrganizer />}
       {isOwner && <RulesList />}
+      <IgnoredList />
     </Card>
   );
 }
@@ -322,6 +323,40 @@ function RulesList() {
           ))}
         </ul>
       )}
+    </section>
+  );
+}
+
+/** متاجر اخترتم ما تنسجل عملياتها («ليست مصروفاً») */
+function IgnoredList() {
+  const { household } = useHousehold();
+  const { data: items = [] } = useIgnoredMerchants();
+  const invalidate = useInvalidate();
+  if (items.length === 0) return null;
+
+  async function remove(key: string, label: string) {
+    try {
+      await unignoreMerchant(household.id, key);
+      await invalidate('ignored-merchants');
+      toast.success(`عمليات «${label}» ترجع تنسجل`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  return (
+    <section className="border-t border-line pt-4">
+      <h3 className="font-semibold">ما تنسجل</h3>
+      <ul className="mt-2 divide-y divide-line rounded-2xl bg-surface-2">
+        {items.map((r) => (
+          <li key={r.merchant_key} className="flex items-center gap-2 px-3 py-1.5 text-sm">
+            <span className="min-w-0 flex-1 truncate" dir="auto">{r.merchant_label}</span>
+            <IconButton label={`إرجاع ${r.merchant_label}`} className="size-8" onClick={() => remove(r.merchant_key, r.merchant_label)}>
+              <Trash className="size-4" weight="bold" />
+            </IconButton>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

@@ -93,10 +93,12 @@ export interface SmsMeta {
   card_nickname?: string;
   /** تحويل العملة */
   fx_rate?: number;
-  fx_source?: 'peg' | 'live' | 'sar';
+  fx_source?: 'peg' | 'live' | 'sar' | 'bank';
   fx_provider?: string;
   fx_fee_pct?: number;
   fees_sar?: number;
+  /** المبلغ هو الإجمالي اللي ذكره البنك (شامل الرسوم) */
+  total_stated?: boolean;
   confidence?: number;
   approx?: boolean;
   rule?: boolean;
@@ -153,6 +155,14 @@ export interface MerchantRule {
   merchant_label: string;
   category_id: string;
   updated_at: string;
+}
+
+/** متجر اخترتم ما تنسجل عملياته (تحويل لحسابكم) */
+export interface IgnoredMerchant {
+  household_id: string;
+  merchant_key: string;
+  merchant_label: string;
+  created_at: string;
 }
 
 export interface AiStatus {

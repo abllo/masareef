@@ -1,11 +1,11 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
-import { AirplaneTilt, ArrowSquareOut, Camera, ChatCircleText, CheckCircle, Plus, Receipt as ReceiptIcon, ShieldCheck, Trash, X } from '@phosphor-icons/react';
+import { AirplaneTilt, ArrowSquareOut, ArrowsLeftRight, Camera, ChatCircleText, CheckCircle, Plus, Receipt as ReceiptIcon, ShieldCheck, Trash, X } from '@phosphor-icons/react';
 import { useNavigate } from 'react-router';
 import { EXPENSE_DEPENDENT, useCards, useCategories, useDeleteExpense, useInvalidate, useSaveExpense, useTrips } from '../hooks/queries';
 import { countryName, flag } from '../lib/countries';
 import { useCanEdit, useHousehold, useMemberName } from '../hooks/household';
-import { receiptUrl, splitExpense } from '../lib/api';
+import { ignoreMerchant, receiptUrl, splitExpense } from '../lib/api';
 import { addDays, formatDayLabel, todayISO } from '../lib/dates';
 import { formatSAR, parseAmount, toInputValue } from '../lib/money';
 import { cardLabel, channelLabel, fxLabel } from '../lib/stats';
@@ -120,6 +120,9 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
   }
 
   const dateChips = [today, addDays(today, -1)];
+  // «ليست مصروفاً»: عملية من رسالة البنك طرفها حسابك (شحن محفظة مثلاً)
+  const canIgnore = Boolean(expense && !readOnly && expense.kind !== 'refund' && expense.kind !== 'cash' && expense.sms_meta && expense.merchant_key && !expense.recurring_id);
+  const [askIgnore, setAskIgnore] = useState(false);
 
   return (
     <form onSubmit={submit} className="space-y-5 pb-2">
@@ -203,6 +206,12 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
       {expense && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
           <span>أضافه {memberName(expense.created_by)}</span>
+          {canIgnore && (
+            <button type="button" onClick={() => setAskIgnore((v) => !v)} aria-expanded={askIgnore}
+              className="inline-flex items-center gap-1 font-medium text-brand">
+              <ArrowsLeftRight className="size-4" weight="bold" /> ليست مصروفاً
+            </button>
+          )}
           <button type="button" onClick={() => { onDone(); navigate(`/renewals?expense=${expense.id}`); }}
             className="inline-flex items-center gap-1 font-medium text-brand">
             <ShieldCheck className="size-4" weight="bold" /> ضمان أو تجديد
@@ -215,6 +224,8 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
           )}
         </div>
       )}
+
+      {askIgnore && expense && <IgnoreMerchant expense={expense} onDone={onDone} onCancel={() => setAskIgnore(false)} />}
 
       {receiptView && (
         <div className="space-y-2">
@@ -251,6 +262,38 @@ function ExpenseForm({ expense, draft, onDone }: { expense?: Expense; draft?: Ex
         <p className="text-xs text-muted">دفعة مصروف ثابت</p>
       )}
     </form>
+  );
+}
+
+/** تحويل لحسابك (شحن محفظة مثلاً): تنحذف العملية وما تنسجل عمليات هذا المتجر بعد اليوم */
+function IgnoreMerchant({ expense, onDone, onCancel }: { expense: Expense; onDone: () => void; onCancel: () => void }) {
+  const { household } = useHousehold();
+  const invalidate = useInvalidate();
+  const [busy, setBusy] = useState(false);
+  const label = (expense.sms_meta?.merchant ?? expense.description ?? '').replace(/^📩\s*/, '').trim() || 'هذا المتجر';
+
+  async function confirm() {
+    setBusy(true);
+    try {
+      await ignoreMerchant(household.id, expense, label);
+      await invalidate(...EXPENSE_DEPENDENT, 'ignored-merchants');
+      toast.success(`ما راح تنسجل عمليات «${label}»`);
+      onDone();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3 rounded-2xl bg-surface-2 p-4 text-sm">
+      <p className="leading-relaxed">تحويل لحسابك؟ نحذفها وما نسجّل عمليات «<span dir="auto">{label}</span>» بعد اليوم.</p>
+      <div className="flex gap-2">
+        <Button type="button" variant="danger" className="flex-1" loading={busy} onClick={confirm}>احذفها وتجاهلها</Button>
+        <Button type="button" variant="secondary" onClick={onCancel}>إلغاء</Button>
+      </div>
+    </div>
   );
 }
 

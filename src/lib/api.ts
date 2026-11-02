@@ -1,6 +1,6 @@
 import { SUPABASE_URL, supabase } from './supabase';
 import type {
-  AiStatus, Card, Category, CategoryAudit, CategoryPlan, Expense, Household, Income, ISODate, Member, MerchantRule, MonthKey, MonthlyTotal, MonthReport,
+  AiStatus, Card, Category, CategoryAudit, CategoryPlan, Expense, Household, IgnoredMerchant, Income, ISODate, Member, MerchantRule, MonthKey, MonthlyTotal, MonthReport,
   ArchiveResult, NotifyPrefs, PlanOp, PlanResult, PushStatus, Recurring, Renewal, RenewalDraft, SmsLogEntry, SmsParseResult, Trip, YearOverview,
 } from './types';
 
@@ -243,6 +243,24 @@ export const fetchRules = async (householdId: string) =>
 
 export const deleteRule = async (householdId: string, merchantKey: string) => {
   check(await supabase.from('merchant_rules').delete().eq('household_id', householdId).eq('merchant_key', merchantKey));
+};
+
+export const fetchIgnoredMerchants = async (householdId: string) =>
+  check(
+    await supabase.from('sms_ignored_merchants').select('*').eq('household_id', householdId).order('merchant_label'),
+  ) as IgnoredMerchant[];
+
+/** «ليست مصروفاً»: عمليات هذا المتجر ما تنسجل بعد اليوم، وتنحذف هذه العملية */
+export async function ignoreMerchant(householdId: string, expense: Pick<Expense, 'id' | 'receipt_path' | 'merchant_key'>, label: string) {
+  if (!expense.merchant_key) throw new Error('ما عرفنا اسم المتجر');
+  check(await supabase.from('sms_ignored_merchants').upsert(
+    { household_id: householdId, merchant_key: expense.merchant_key, merchant_label: label.slice(0, 120) },
+    { onConflict: 'household_id,merchant_key', ignoreDuplicates: true }));
+  await deleteExpense(expense);
+}
+
+export const unignoreMerchant = async (householdId: string, merchantKey: string) => {
+  check(await supabase.from('sms_ignored_merchants').delete().eq('household_id', householdId).eq('merchant_key', merchantKey));
 };
 
 export const fetchRule = async (householdId: string, merchantKey: string) =>
